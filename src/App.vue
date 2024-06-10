@@ -10,11 +10,6 @@
         :display-u-i="displayUI"
         :url="url"
         :help-mode="helpMode"
-        :helpModeDialog="useHelpModeDialog"
-        :helpModeActiveItem="helpModeActiveItem"
-        @help-mode-last-item="onHelpModeLastItem"
-        @shown-tooltip="onTooltipShown"
-        @shown-map-tooltip="onMapTooltipShown"
         :display-latest-changes="true"
         :display-minimap="displayMinimap"
         :display-markers="displayMarkers"
@@ -36,15 +31,6 @@
         @vue:mounted="viewerMounted"
       />
     </drop-zone>
-
-    <HelpModeDialog
-      v-if="helpMode && useHelpModeDialog"
-      ref="scaffoldHelp"
-      :scaffoldRef="scaffoldRef"
-      :lastItem="helpModeLastItem"
-      @show-next="onHelpModeShowNext"
-      @finish-help-mode="onFinishHelpMode"
-    />
 
     <el-popover popper-class="options-container" placement="bottom" trigger="click" width="500" :teleported="false">
       <div>
@@ -219,7 +205,6 @@ import {
   ElSwitch as Switch,
 } from "element-plus";
 import { useRoute, useRouter } from 'vue-router'
-import HelpModeDialog from './components/HelpModeDialog.vue';
 
 let texture_prefix = undefined;
 
@@ -240,12 +225,11 @@ export default {
     DropZone,
     ScaffoldVuer,
     ModelsTable,
-    HelpModeDialog,
   },
   data: function () {
     return {
       consoleOn: true,
-      createPoints: false, 
+      createPoints: false,
       url: undefined,
       input: undefined,
       displayUI: true,
@@ -334,9 +318,6 @@ export default {
       readyCallback: undefined,
       flatmapAPI: "https://mapcore-demo.org/devel/flatmap/v4/",
       helpMode: false,
-      helpModeActiveItem: 0,
-      helpModeLastItem: false,
-      useHelpModeDialog: true,
       scaffoldRef: null,
       route: useRoute(),
       router: useRouter(),
@@ -359,11 +340,6 @@ export default {
     },
     syncMode: function (val) {
       this.$refs.scaffold.toggleSyncControl(val);
-    },
-    helpMode: function (newVal) {
-      if (!newVal) {
-        this.helpModeActiveItem = 0;
-      }
     },
   },
   mounted: function () {
@@ -642,30 +618,6 @@ export default {
           this.viewURL = "";
         }
       })
-    },
-    onHelpModeShowNext: function () {
-      this.helpModeActiveItem += 1;
-    },
-    onHelpModeLastItem: function (isLastItem) {
-      if (isLastItem) {
-        this.helpModeLastItem = true;
-      }
-    },
-    onFinishHelpMode: function () {
-      this.helpMode = false;
-      // reset help mode to default values
-      this.helpModeActiveItem = 0;
-      this.helpModeLastItem = false;
-    },
-    onTooltipShown: function () {
-      if (this.$refs.scaffold && this.$refs.scaffoldHelp) {
-        this.$refs.scaffoldHelp.toggleTooltipHighlight();
-      }
-    },
-    onMapTooltipShown: function () {
-      if (this.$refs.scaffold && this.$refs.scaffoldHelp) {
-        this.$refs.scaffoldHelp.toggleTooltipPinHighlight();
-      }
     },
   },
 };

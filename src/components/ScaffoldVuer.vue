@@ -553,11 +553,11 @@ export default {
       default: 0,
     },
     /**
-     * The option to use helpModeDialog.
+     * The option to use HelpModeDialog when it is installed.
      * On default, `false`, clicking help will show all tooltips.
-     * If `true`, clicking help will show the help-mode-dialog.
+     * If `true`, and HelpModeDialog component is installed, clicking help will show the help-mode-dialog.
      */
-    helpModeDialog: {
+    useHelpModeDialog: {
       type: Boolean,
       default: false,
     },
@@ -1186,7 +1186,7 @@ export default {
       return objects;
     },
     /**
-     * Switch active drawing type 
+     * Switch active drawing type
      * @arg shapeName shape to toggle
      *
      * @vuese
@@ -1299,7 +1299,7 @@ export default {
         this._tempPoint = this.$module.scene.addTemporaryPoints([coords], 0xffff00);
         this.createData.points.push(coords);
       }
-    },    
+    },
     /**
      * Return renderer information
      *
@@ -1602,12 +1602,12 @@ export default {
         this.$emit('help-mode-last-item', true);
       }
 
-      if (helpMode && !this.helpModeDialog) {
+      if (helpMode && !this.useHelpModeDialog) {
         this.inHelp = true;
         this.hoverVisibilities.forEach((item) => {
           item.value = true;
         });
-      } else if (helpMode && this.helpModeDialog && toolTipsLength > this.helpModeActiveIndex) {
+      } else if (helpMode && this.useHelpModeDialog && toolTipsLength > this.helpModeActiveIndex) {
 
         // Show the map tooltip as first item
         if (this.helpModeActiveIndex > -1) {
