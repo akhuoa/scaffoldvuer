@@ -38,10 +38,21 @@ const OrgansSceneData = function() {
 	const timeChangedCallbacks = new Array();
 	const sceneChangedCallbacks = new Array();
   const organPartAddedCallbacks = new Array();
+	const organPartRemovedCallbacks = new Array();
   let finishDownloadCallback = undefined;
+	let downloadErrorCallback = undefined;
 	const modelsLoader = ModelsLoaderIn;
   this.NDCCameraControl = undefined;
 	_this.typeName = "Organ Viewer";
+	let ignorePicking = false;
+
+	this.isIgnorePicking = function() {
+    	return ignorePicking;
+	}
+	
+	this.setIgnorePicking = function(value) {
+		ignorePicking = value;
+	}
 
 	this.getSceneData = function() {
 	  return _this.sceneData;
@@ -148,9 +159,9 @@ const OrgansSceneData = function() {
 		}
 	}
 	
-	 /**
-		 * Add a callback which will be called when time has changed
-		 */
+	/**
+	 * Add a callback which will be called when time has changed
+	 */
 	this.addTimeChangedCallback = function(callback) {
 	  if (typeof(callback === "function"))
 	    timeChangedCallbacks.push(callback);
@@ -172,6 +183,11 @@ const OrgansSceneData = function() {
       organPartAddedCallbacks.push(callback);
   }
 
+	this.addOrganPartRemovedCallback = function(callback) {
+    if (typeof(callback === "function"))
+      organPartRemovedCallbacks.push(callback);
+  }
+
   this.setFinishDownloadCallback = function(callback) {
     if (typeof(callback === "function"))
       finishDownloadCallback = callback;
@@ -179,6 +195,16 @@ const OrgansSceneData = function() {
 
   this.unsetFinishDownloadCallback = function() {
     finishDownloadCallback = undefined;
+  }
+
+
+  this.setDownloadErrorCallback = function(callback) {
+    if (typeof(callback === "function"))
+      downloadErrorCallback = callback;
+  }
+
+  this.unsetDownloadErrorCallback = function() {
+    downloadErrorCallback = undefined;
   }
 
   this.getNamedObjectsToScreenCoordinates = function(name, camera) {
@@ -239,10 +265,12 @@ const OrgansSceneData = function() {
 					intersected ? intersected.point.y : 0,
 					intersected ? intersected.point.z : 0,
 				],
-				intersected,
+				intersected: intersected,
+				intersects: intersects,
 			};
       const coords = { x: window_x, y: window_y };
       if (idObject.id) {
+				extraData.threeID = idObject.object?.id;
         if (idObject.object.userData.isGlyph) { 
           if (idObject.object.name) {
             _this.setSelectedByObjects([idObject.object], coords,
@@ -256,6 +284,7 @@ const OrgansSceneData = function() {
         }
         return;
       } else {
+		if (ignorePicking) return;
 				_this.setSelectedByObjects([], coords, extraData, true);
 			}
 		}
@@ -279,6 +308,7 @@ const OrgansSceneData = function() {
 			}
       const coords = { x: window_x, y: window_y };
       if (idObject.id) {
+				extraData.threeID = idObject.object?.id;
         _this.displayArea.style.cursor = "pointer";
         _this.setHighlightedByObjects([idObject.object], coords, extraData, true);
         return;
@@ -393,6 +423,12 @@ const OrgansSceneData = function() {
 		zincObject.userData["annotation"] = annotation;
 	}
 
+	const removeOrganPart = function(systemName, partName, useDefautColour, zincObject) {
+    for (let i = 0; i < organPartRemovedCallbacks.length;i++) {
+      organPartRemovedCallbacks[i](zincObject);
+    }
+	}
+
 	  /**
 		 * New organs geometry has been added to the scene, add UIs and make
 		 * sure the viewport is correct.
@@ -400,6 +436,15 @@ const OrgansSceneData = function() {
 	  const _addOrganPartCallback = function(systemName, partName, useDefautColour) {
 	    return function(zincObject) {
 	    	addOrganPart(systemName, partName, useDefautColour, zincObject);
+	    }
+	  }
+
+	  /**
+		 * Organs geometry has been removed to the scene.
+		 */
+	  const _removeOrganPartCallback = function(systemName, partName, useDefautColour) {
+	    return function(zincObject) {
+	    	removeOrganPart(systemName, partName, useDefautColour, zincObject);
 	    }
 	  }
 	  
@@ -411,11 +456,22 @@ const OrgansSceneData = function() {
           finishDownloadCallback();
 		  }
 	  }
-	  
-	  const singleItemDownloadCompletedCallback = function(systemName, partName, useDefautColour) {
-      return function(geometry) {
-        addOrganPart(systemName, partName, useDefautColour, geometry);
-        _this.settingsChanged();
+
+		//The payload can either be a zinc object when the loading is successful or
+		//an object containg the details of error message on failure.
+		//We only use it to handle an error 
+	  const singleItemFinishCallback = function() {
+      return function(payload) {
+
+				if (payload?.type === "Error") {
+					if (downloadErrorCallback) {
+						const error = {
+							xhr: payload.xhr,
+							type: "download-error",
+						};
+						downloadErrorCallback(error);
+					}
+				}
       }
 	  }
 	  
@@ -465,6 +521,19 @@ const OrgansSceneData = function() {
 	    }
 	    return availableSpecies;
 	  }
+
+		/**
+		 * Return the center and size of the cuurrent viewing scene
+		 */
+		this.getCentreAndSize = function() {
+			const vector = new THREE.Vector3();
+			const boundingBox = this.scene.getBoundingBox();
+			boundingBox.getCenter(vector);
+			const centre = [vector.x, vector.y, vector.z];
+			boundingBox.getSize(vector);
+			const size = [vector.x, vector.y, vector.z];
+			return {centre, size};
+		}
 	  
 	  const setSceneData = function(speciesName, systemName, partName, organsDetails) {
       _this.sceneData.nerveMapIsActive = false;
@@ -487,7 +556,7 @@ const OrgansSceneData = function() {
       _this.sceneData.currentName = name;
 	  }
 
-	  this.loadOrgansFromURL = function(url, speciesName, systemName, partName, viewURL, clearFirst) {
+	  this.loadOrgansFromURL = function(url, speciesName, systemName, partName, viewURL, clearFirst, options) {
 		  if (_this.zincRenderer) {
 			  if (partName && (_this.sceneData.metaURL !== url)) {
 			      setSceneData(speciesName, systemName, partName, undefined);
@@ -511,7 +580,8 @@ const OrgansSceneData = function() {
             }
 			      _this.sceneData.metaURL = url;
 						organScene.addZincObjectAddedCallbacks(_addOrganPartCallback(systemName, partName, false));
-			      organScene.loadMetadataURL(url, undefined, downloadCompletedCallback());	      
+			      organScene.addZincObjectRemovedCallbacks(_removeOrganPartCallback(undefined, partName, false));
+						organScene.loadMetadataURL(url, singleItemFinishCallback(), downloadCompletedCallback(), options);
 			      _this.scene = organScene;
 			      _this.zincRenderer.setCurrentScene(organScene);
 			      _this.graphicsHighlight.reset();
@@ -541,7 +611,8 @@ const OrgansSceneData = function() {
   	    	  _this.sceneData.viewURL = undefined;
 			      _this.sceneData.metaURL = url;
 						organScene.addZincObjectAddedCallbacks(_addOrganPartCallback(undefined, partName, false));
-			      organScene.loadGLTF(url, undefined, downloadCompletedCallback());
+			      organScene.addZincObjectRemovedCallbacks(_removeOrganPartCallback(undefined, partName, false));
+						organScene.loadGLTF(url, undefined, downloadCompletedCallback());
 			      _this.scene = organScene;
 			      _this.zincRenderer.setCurrentScene(organScene);
 			      _this.graphicsHighlight.reset();

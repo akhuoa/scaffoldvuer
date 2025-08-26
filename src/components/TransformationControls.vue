@@ -1,50 +1,85 @@
 <template>
   <el-container class="transformation-container">
     <el-main class="slides-block">
-      <el-row>
-        <el-col :offset="0" :span="8">
-          Position:
-        </el-col>
-      </el-row>
-      <el-row class="">
-        <el-col :offset="3" :span="1">
+      <el-row class="tool-row">
+        <el-col :offset="0" :span="6">
           x:
         </el-col>
-        <el-col :span="3">
+        <el-col :offset="0" :span="10">
+          <el-slider
+            v-model="x"
+            :step="0.01"
+            :min="min[0]"
+            :max="max[0]"
+            :show-tooltip="false"
+            @input="modifyPosition()"
+          />
+        </el-col>
+        <el-col :offset="0" :span="6">
           <el-input-number
             v-model="x"
-            :step="1"
+            :step="0.01"
+            :min="min[0]"
+            :max="max[0]"
             :controls="false"
             class="input-box number-input"
-            @change="modifyPosition"
-          />
-        </el-col>
-        <el-col :offset="3" :span="1">
-          y:
-        </el-col>
-        <el-col :span="3">
-          <el-input-number
-            v-model="y"
-            :step="1"
-            :controls="false"
-            class="input-box number-input"
-            @change="modifyPosition"
-          />
-        </el-col>
-        <el-col :offset="3" :span="1">
-          z:
-        </el-col>
-        <el-col :span="3">
-          <el-input-number
-            v-model="z"
-            :step="1"
-            :controls="false"
-            class="input-box number-input"
-            @change="modifyPosition"
+            @change="modifyPosition()"
           />
         </el-col>
       </el-row>
       <el-row class="tool-row">
+        <el-col :offset="0" :span="6">
+          y:
+        </el-col>
+        <el-col :offset="0" :span="10">
+          <el-slider
+            v-model="y"
+            :step="0.01"
+            :min="min[1]"
+            :max="max[1]"
+            :show-tooltip="false"
+            @input="modifyPosition()"
+          />
+        </el-col>
+        <el-col :offset="0" :span="6">
+          <el-input-number
+            v-model="y"
+            :step="0.01"
+            :min="min[1]"
+            :max="max[1]"
+            :controls="false"
+            class="input-box number-input"
+            @change="modifyPosition()"
+          />
+        </el-col>
+      </el-row>
+      <el-row class="tool-row">
+        <el-col :offset="0" :span="6">
+          z:
+        </el-col>
+        <el-col :offset="0" :span="10">
+          <el-slider
+            v-model="z"
+            :step="0.01"
+            :min="min[2]"
+            :max="max[2]"
+            :show-tooltip="false"
+            @input="modifyPosition()"
+          />
+        </el-col>
+        <el-col :offset="0" :span="6">
+          <el-input-number
+            v-model="z"
+            :step="0.01"
+            :min="min[2]"
+            :max="max[2]"
+            :controls="false"
+            class="input-box number-input"
+            @change="modifyPosition()"
+          />
+        </el-col>
+      </el-row>
+      <el-row class="tool-row" v-if="enableScaling">
         <el-col :offset="0" :span="6">
           Scale:
         </el-col>
@@ -82,7 +117,9 @@ import {
   ElContainer as Container,
   ElInputNumber as InputNumber,
   ElMain as Main,
+  ElSlider as Slider,
 } from "element-plus";
+import { markRaw } from "vue";
 
 /**
  * A component to control the opacity of the target object.
@@ -94,31 +131,72 @@ export default {
     Container,
     InputNumber,
     Main,
+    Slider,
   },
+  inject: ['boundingDims'],
   data: function () {
     return {
       x: 0,
       y: 0,
       z: 0,
       scale: 1,
+      min: [0, 0, 0],
+      max: [1, 1, 1],
+      zincObject: undefined,
+      enableScaling: true
     };
   },
-  mounted: function () {
-    this._zincObject = undefined;
+  watch: {
+    boundingDims: {
+      handler: function (value) {
+        const centre = value.centre;
+        const size = value.size;
+        this.min = [
+          centre[0] - size[0],
+          centre[1] - size[1],
+          centre[2] - size[2]
+        ];
+        this.max = [
+          centre[0] + size[0],
+          centre[1] + size[1],
+          centre[2] + size[2]
+        ];
+      },
+      immediate: true,
+      deep: true,
+    },
   },
   methods: {
     setObject: function (object) {
       if (object.isZincObject) {
-        this._zincObject = object;
-        const morph = this._zincObject.getGroup();
+        this.zincObject = markRaw(object);
+        const morph = this.zincObject.getGroup();
+        const originalPos = this.zincObject.userData.originalPos;
         if (morph && morph.position) {
           this.x = morph.position.x;
           this.y = morph.position.y;
           this.z = morph.position.z;
-          this.scale = morph.scale.x;
+          if (this.zincObject.isGlyphset) {
+            this.scale = this.zincObject.globalScale;
+          } else {
+            this.scale = morph.scale.x;
+          }
+          this.enableScaling = this.zincObject.isTextureSlides ? false : true;
+          if (originalPos && this.boundingDims) {
+            this.min = [
+              originalPos[0] - this.boundingDims.size[0],
+              originalPos[1] - this.boundingDims.size[1],
+              originalPos[2] - this.boundingDims.size[2]
+            ];
+            this.max = [
+              originalPos[0] + this.boundingDims.size[0],
+              originalPos[1] + this.boundingDims.size[1],
+              originalPos[2] + this.boundingDims.size[2]
+            ];
+          }
         }
       } else {
-        this._zincObject = undefined;
+        this.zincObject = undefined;
         this.x = 0;
         this.y = 0;
         this.z = 0;
@@ -126,10 +204,12 @@ export default {
       }
     },
     modifyPosition: function() {
-      this._zincObject.setPosition(this.x, this.y, this.z);
+      if (this.zincObject) {
+        this.zincObject.setPosition(this.x, this.y, this.z);
+      }
     },
     modifyScale: function() {
-      this._zincObject.setScaleAll(this.scale);
+      this.zincObject.setScaleAll(this.scale);
     },
   },
 };

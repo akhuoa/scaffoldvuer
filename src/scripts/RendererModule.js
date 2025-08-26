@@ -4,6 +4,7 @@ const THREE = Zinc.THREE;
 import { BaseModule } from './BaseModule';
 import { EVENT_TYPE } from "./EventNotifier";
 import GraphicsHighlight from "./GraphicsHighlight";
+import { objectsToZincObjects } from "./Utilities";
 
 /**
  * Create a {@link Zinc.Renderer} on the dom element with corresponding elementID.
@@ -37,6 +38,7 @@ const RendererModule = function()  {
   this.selectedScreenCoordinates = new THREE.Vector3();
   this.selectedCenter = undefined;
   this.liveUpdatesObjects = undefined;
+  this.ignorePreviousSelected = false;
 }
 
 RendererModule.prototype = Object.create(BaseModule.prototype);
@@ -44,19 +46,29 @@ RendererModule.prototype = Object.create(BaseModule.prototype);
 RendererModule.prototype.getIntersectedObject = function(intersects) {
 	if (intersects) {
     const typeMap = intersects.map(intersect => {
-        if (intersect && intersect.object &&
-          intersect.object.userData) {
-          if (intersect.object.userData.isMarker) {
-            return 1;
-          } else if (intersect.object.name && 
-            intersect.object.userData.isZincObject) {
+      if (intersect && intersect.object &&
+        intersect.object.userData) {
+        if (intersect.object.userData.isMarker) {
+          return 1;
+        } else if (intersect.object.name && 
+          intersect.object.userData.isZincObject) {
+          if (intersect.object.name === "_Unnamed") {
+            return 3;
+          } else {
             return 2;
           }
         }
-        return 0;
+      }
+      return 0;
     });
+    //prioritise markers
     let i = typeMap.indexOf(1);
-    i = (i > -1) ? i : typeMap.indexOf(2);
+    if (i > -1) {
+      return intersects[i];
+    }
+    //Proritise objects that is not called _Unnamed
+    i = typeMap.indexOf(2);
+    i = (i > -1) ? i : typeMap.indexOf(3);
     return intersects[i];
 	}
 	return undefined;
@@ -71,8 +83,9 @@ RendererModule.prototype.getAnnotationsFromObjects = function(objects) {
     if (zincObject) {
       if (zincObject.isGlyph || zincObject.isGlyphset) {
         let glyphset = zincObject;
-        if (zincObject.isGlyph)
+        if (zincObject.isGlyph) {
           glyphset = zincObject.getGlyphset();
+        }
         annotation = glyphset.userData ? glyphset.userData.annotation : undefined;
         if (annotation && annotation.data) {
           if (objects[i].name && objects[i].name != "")
@@ -86,6 +99,11 @@ RendererModule.prototype.getAnnotationsFromObjects = function(objects) {
           annotation.data.id = objects[i].name;
         }
       }
+      if (annotation) {
+        annotation.data.anatomicalId = zincObject.anatomicalId;
+        annotation.data.isNerves = zincObject.userData.isNerves;
+        annotation.data.zincObject = zincObject;
+      }
     }
     if (annotation)
       annotations.push(annotation);
@@ -95,8 +113,8 @@ RendererModule.prototype.getAnnotationsFromObjects = function(objects) {
 
 RendererModule.prototype.setHighlightedByObjects = function(
   objects, coords, extraData, propagateChanges) {
+  const zincObjects = objectsToZincObjects(objects);
   const changed = this.graphicsHighlight.setHighlighted(objects);
-  const zincObjects = this.objectsToZincObjects(objects);
   if (propagateChanges) {
     let eventType = EVENT_TYPE.MOVE;
     if (changed)
@@ -145,24 +163,6 @@ RendererModule.prototype.setupLiveCoordinates = function(zincObjects) {
   }
 }
 
-RendererModule.prototype.objectsToZincObjects = function(objects) {
-  const zincObjects = [];
-  for (let i = 0; i < objects.length; i++) {
-    let zincObject = objects[i].userData;
-    if (zincObject) {
-      if (zincObject.isGlyph || zincObject.isGlyphset) {
-        let glyphset = zincObject;
-        if (zincObject.isGlyph)
-          glyphset = zincObject.getGlyphset();
-        zincObjects.push(glyphset);
-      } else {
-        zincObjects.push(zincObject);
-      }
-    }
-  }
-  return zincObjects;
-}
-
 
 RendererModule.prototype.setSelectedByObjects = function(
   objects, coords, extraData, propagateChanges) {
@@ -172,8 +172,8 @@ RendererModule.prototype.setSelectedByObjects = function(
   } else {
     changed = true;
   }
-  if (changed) {
-    const zincObjects = this.objectsToZincObjects(objects);
+  if (changed || this.ignorePreviousSelected) {
+    const zincObjects = objectsToZincObjects(objects);
     if (this.selectObjectOnPick) {
       this.setupLiveCoordinates(zincObjects);
     }

@@ -7,16 +7,14 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
-    CreateTooltipContent: typeof import('./components/CreateTooltipContent.vue')['default']
     ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
     ElButton: typeof import('element-plus/es')['ElButton']
+    ElButtonGroup: typeof import('element-plus/es')['ElButtonGroup']
     ElCol: typeof import('element-plus/es')['ElCol']
     ElCollapse: typeof import('element-plus/es')['ElCollapse']
     ElCollapseItem: typeof import('element-plus/es')['ElCollapseItem']
-    ElColorPicker: typeof import('element-plus/es')['ElColorPicker']
     ElContainer: typeof import('element-plus/es')['ElContainer']
     ElFooter: typeof import('element-plus/es')['ElFooter']
-    ElHeader: typeof import('element-plus/es')['ElHeader']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ElIconArrowLeft: typeof import('@element-plus/icons-vue')['ArrowLeft']
     ElIconArrowRight: typeof import('@element-plus/icons-vue')['ArrowRight']
@@ -28,6 +26,8 @@ declare module 'vue' {
     ElMain: typeof import('element-plus/es')['ElMain']
     ElOption: typeof import('element-plus/es')['ElOption']
     ElPopover: typeof import('element-plus/es')['ElPopover']
+    ElRadio: typeof import('element-plus/es')['ElRadio']
+    ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
     ElRow: typeof import('element-plus/es')['ElRow']
     ElSelect: typeof import('element-plus/es')['ElSelect']
     ElSlider: typeof import('element-plus/es')['ElSlider']
@@ -36,8 +36,6 @@ declare module 'vue' {
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
-    ElTree: typeof import('element-plus/es')['ElTree']
-    HelpModeDialog: typeof import('./components/HelpModeDialog.vue')['default']
     LinesControls: typeof import('./components/LinesControls.vue')['default']
     OpacityControls: typeof import('./components/OpacityControls.vue')['default']
     PointsControls: typeof import('./components/PointsControls.vue')['default']
@@ -45,10 +43,10 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ScaffoldTooltip: typeof import('./components/ScaffoldTooltip.vue')['default']
+    ScaffoldTreeControls: typeof import('./components/ScaffoldTreeControls.vue')['default']
     ScaffoldVuer: typeof import('./components/ScaffoldVuer.vue')['default']
     TextureSlidesControls: typeof import('./components/TextureSlidesControls.vue')['default']
     TransformationControls: typeof import('./components/TransformationControls.vue')['default']
-    TreeControls: typeof import('./components/TreeControls.vue')['default']
   }
   export interface ComponentCustomProperties {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

@@ -1,50 +1,152 @@
 <template>
   <el-container class="lines-container">
     <el-main class="slides-block">
-      <el-row>
-        <el-col :offset="0" :span="6">
-          Width:
-        </el-col>
-        <el-col :offset="0" :span="10">
-          <el-slider
-            v-model="width"
-            class="my-slider"
-            :step="1"
-            :min="1"
-            :max="100"
-            :show-tooltip="false"
-            @input="modifyWidth"
-          />
-        </el-col>
-        <el-col :offset="0" :span="6">
-          <el-input-number
-            v-model="width"
-            :step="1"
-            :min="1"
-            :max="100"
-            :controls="false"
-            class="input-box number-input"
-          />
-        </el-col>
-      </el-row>
-      <el-row v-if="createData.faceIndex > -1">
-        <el-col :offset="0" :span="4">
-          <el-button :icon="ElIconArrowLeft" @click="onMoveClick(-unit)"/>
-        </el-col>
-        <el-col :offset="3" :span="3">
-          Move
-        </el-col>
-        <el-col :offset="0" :span="7">
-          <el-input-number
-            v-model="unit"
-            :controls="false"
-            class="input-box number-input"
-          />
-        </el-col>
-        <el-col :offset="2" :span="2">
-          <el-button :icon="ElIconArrowRight" @click="onMoveClick(unit)"/>
-        </el-col>
-      </el-row>
+      <template v-if="isTubeLines && showTubeLinesControls">
+        <el-row>
+          <el-col :offset="0" :span="6">
+            Radius:
+          </el-col>
+          <el-col :offset="0" :span="12">
+            <el-slider
+              v-model="radius"
+              class="my-slider"
+              :step="1"
+              :min="1"
+              :max="32"
+              :show-tooltip="false"
+              @input="modifyTubeLines"
+            />
+          </el-col>
+          <el-col :offset="0" :span="4">
+            <el-input-number
+              v-model="radius"
+              :step="1"
+              :min="1"
+              :max="32"
+              :controls="false"
+              @change="modifyTubeLines"
+              class="input-box number-input"
+            />
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :offset="0" :span="6">
+            Radial Segments:
+          </el-col>
+          <el-col :offset="0" :span="12">
+            <el-slider
+              v-model="radialSegments"
+              class="my-slider"
+              :step="1"
+              :min="8"
+              :max="32"
+              :show-tooltip="false"
+              @input="modifyTubeLines"
+            />
+          </el-col>
+          <el-col :offset="0" :span="4">
+            <el-input-number
+              v-model="radialSegments"
+              :step="1"
+              :min="8"
+              :max="32"
+              :controls="false"
+              @change="modifyTubeLines"
+              class="input-box number-input"
+            />
+          </el-col>
+        </el-row>
+      </template>
+      <template v-else-if="!isTubeLines">
+        <el-row>
+          <el-col :offset="0" :span="6">
+            Width:
+          </el-col>
+          <el-col :offset="0" :span="12">
+            <el-slider
+              v-model="width"
+              class="my-slider"
+              :step="1"
+              :min="1"
+              :max="100"
+              :show-tooltip="false"
+              @input="modifyWidth"
+            />
+          </el-col>
+          <el-col :offset="0" :span="4">
+            <el-input-number
+              v-model="width"
+              :step="1"
+              :min="1"
+              :max="100"
+              :controls="false"
+              class="input-box number-input"
+            />
+          </el-col>
+        </el-row>
+      </template>
+      <template v-if="currentIndex > -1 && distance > 0">
+        <el-row>
+          <el-col :offset="0" :span="4">
+            <el-button
+              size='small'
+              :disabled="currentIndex === 0"
+              :icon="ElIconArrowLeft"
+              @click="changeIndex(false)"
+            />
+          </el-col>
+          <el-col :offset="4" :span="9">
+            Editing Line {{ currentIndex + 1}}
+          </el-col>
+          <el-col :offset="2" :span="2">
+            <el-button
+              size='small'
+              :icon="ElIconArrowRight"
+              @click="changeIndex(true)"
+            />
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :offset="0" :span="6">
+            Move:
+          </el-col>
+          <el-col :offset="0" :span="16">
+            <el-slider
+              v-model="adjust"
+              :step="0.01"
+              :min="-3"
+              :max="3"
+              :show-tooltip="false"
+              @input="onMoveSliding()"
+              @change="reset()"
+            />
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :offset="0" :span="6">
+            Length:
+          </el-col>
+          <el-col :offset="0" :span="10">
+            <el-slider
+              v-model="lengthScale"
+              :step="0.01"
+              :min="-1"
+              :max="1"
+              :show-tooltip="false"
+              @input="onLengthSliding()"
+              @change="reset()"
+            />
+          </el-col>
+          <el-col :offset="0" :span="6">
+            <el-input-number
+              v-model="newDistance"
+              :controls="false"
+              class="input-box number-input"
+              @change="onLengthInput"
+            />
+          </el-col>
+        </el-row>
+      </template>
     </el-main>
   </el-container>
 </template>
@@ -53,9 +155,11 @@
 /* eslint-disable no-alert, no-console */
 // This is not in use at this moment, due to
 // limited support to line width
-import { shallowRef } from 'vue';
+import { markRaw, shallowRef } from 'vue';
 import {
-  moveLine,
+  getLineDistance,
+  moveAndExtendLine,
+  NERVE_CONFIG
 } from "../scripts/Utilities.js";
 import {
   ElButton as Button,
@@ -63,11 +167,9 @@ import {
   ElContainer as Container,
   ElInputNumber as InputNumber,
   ElMain as Main,
-  ElSelect as Select,
   ElSlider as Slider,
-  ElOption as Option,
 } from "element-plus";
-import {
+import{
   ArrowLeft as ElIconArrowLeft,
   ArrowRight as ElIconArrowRight,
 } from '@element-plus/icons-vue';
@@ -83,9 +185,7 @@ export default {
     Container,
     InputNumber,
     Main,
-    Select,
     Slider,
-    Option,
     ElIconArrowLeft,
     ElIconArrowRight,
   },
@@ -93,33 +193,112 @@ export default {
     createData: {
       type: Object,
     },
+    usageConfig: {
+      type: Object,
+    },
   },
   data: function () {
     return {
+      adjust: 0,
+      pAdjust: 0,
+      lengthScale: 0,
+      distance: 0,
+      newDistance: 0, 
       width: 1,
-      unit: 0.1,
+      radius: NERVE_CONFIG.DEFAULT_RADIUS,
+      radialSegments: NERVE_CONFIG.DEFAULT_RADIAL_SEGMENTS,
+      currentIndex: 0,
       ElIconArrowLeft: shallowRef(ElIconArrowLeft),
       ElIconArrowRight: shallowRef(ElIconArrowRight),
+      edited: false,
+      zincObject: undefined,
+      isTubeLines: false,
     };
   },
-  mounted: function () {
-    this._zincObject = undefined;
+  computed: {
+    showTubeLinesControls() {
+      return this.usageConfig.showTubeLinesControls;
+    },
+  },
+  watch: {
+    "createData.faceIndex": {
+      handler: function (value) {
+        if (this.zincObject?.isLines2) {
+          this.currentIndex = value;
+          this.distance = getLineDistance(this.zincObject, this.currentIndex);
+        }
+      },
+      immediate: true,
+    },
   },
   methods: {
-    onMoveClick: function(unit) {
-      moveLine(this._zincObject, this.createData.faceIndex, unit);
+    changeIndex: function(increment) {
+      if (increment) {
+        const dist = getLineDistance(this.zincObject, this.currentIndex + 1);
+        if (dist > 0) {
+          this.currentIndex++;
+          this.reset();
+        }
+      } else {
+        this.currentIndex--;
+        this.reset();
+      }
+    },
+    onLengthInput: function() {
+      if (this.newDistance !== 0) {
+        this.distance = this.newDistance;
+        this.edited = moveAndExtendLine(
+          this.zincObject, this.currentIndex, this.newDistance, true) || this.edited;
+      } else {
+        this.newDistance = this.distance;
+      }
+    },
+    onLengthSliding: function() {
+      this.newDistance = Math.pow(10, this.lengthScale) * this.distance;
+      this.edited = moveAndExtendLine(
+        this.zincObject, this.currentIndex, this.newDistance, true) || this.edited;
+    },
+    onMoveSliding: function() {
+      const diff = (this.adjust - this.pAdjust) * this.distance;
+      this.edited =  moveAndExtendLine(
+        this.zincObject, this.currentIndex, diff, false) || this.edited;
+      this.pAdjust = this.adjust;
+    },
+    reset: function() {
+      this.adjust = 0;
+      this.pAdjust = 0;
+      this.lengthScale = 0;
+      this.distance = getLineDistance(this.zincObject, this.currentIndex);
+      this.newDistance = this.distance;
+      if (this.edited) {
+        this.$emit("primitivesUpdated", this.zincObject);
+        this.edited = false;
+      }
     },
     setObject: function (object) {
-      if (object.isLines) {
-        this._zincObject = object;
-        this.width = this._zincObject.getMorph().material.linewidth;
+      this.currentIndex = -1;
+      this.distance = 0;
+      if (object.isLines2 || object.isTubeLines) {
+        this.zincObject = markRaw(object);
+        this.width = this.zincObject.getMorph().material.linewidth;
+        this.isTubeLines = object.isTubeLines;
+        if (object.isEditable) {
+          this.currentIndex = 0;
+          this.distance = getLineDistance(object, this.currentIndex);
+        } else if (object.userData?.isNerves) {
+          this.radius = NERVE_CONFIG.ZOOM_RADIUS;
+          this.radialSegments = NERVE_CONFIG.ZOOM_RADIAL_SEGMENTS;
+        }
       } else {
-        this._zincObject = undefined;
-        this.linewidth = 10;
+        this.zincObject = undefined;
+        this.width = 10;
       }
     },
     modifyWidth: function () {
-      this._zincObject.setWidth(this.width);
+      this.zincObject.setWidth(this.width);
+    },
+    modifyTubeLines: function () {
+      this.zincObject.setTubeLines(this.radius, this.radius * this.radialSegments);
     },
   },
 };

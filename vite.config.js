@@ -46,12 +46,14 @@ export default defineConfig(({ command, mode }) => {
         fileName: 'scaffoldvuer',
       },
       rollupOptions: {
-        external: ["vue", "@abi-software/flatmapvuer", "@abi-software/svg-sprite"],
+        external: ["vue", "@abi-software/sparc-annotation", "@abi-software/svg-sprite", "@abi-software/map-utilities", "pinia"],
         output: {
           globals: {
             vue: "Vue",
-            "@abi-software/flatmapvuer": "@abi-software/flatmapvuer",
-            "@abi-software/svg-sprite": "@abi-software/svg-sprite"
+            "@abi-software/sparc-annotation": "@abi-software/sparc-annotation",
+            "@abi-software/svg-sprite": "@abi-software/svg-sprite",
+            "@abi-software/map-utilities": "@abi-software/map-utilities",
+            "pinia": "pinia"
           },
         },
       },

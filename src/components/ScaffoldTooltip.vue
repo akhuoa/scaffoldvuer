@@ -14,32 +14,63 @@
       <template #default>
         <div class="tooltip-text">{{ label }}</div>
         <div class="tooltip-text" v-if="region">Region: {{ region }}</div>
-        <CreateTooltiipContent
+        <CreateTooltipContent
           v-show="createData.toBeConfirmed"
           :createData="createData"
           @confirm-create="$emit('confirm-create', $event)"
           @cancel-create="$emit('cancel-create')"
-        /> 
+        />
         <Tooltip
           class="p-tooltip"
           v-show="annotationDisplay && !createData.toBeConfirmed"
           ref="annotationTooltip"
           :annotationDisplay="true"
           :annotationEntry="annotationEntry"
+          @annotation="$emit('confirm-comment', $event)"
         />
+        <div v-if="createData.toBeDeleted" class="delete-container">
+          <el-row>
+            <el-col :span="10">Delete this feature?</el-col>
+            <el-col :span="7">
+              <el-button
+                class="delete-button"
+                :icon="ElIconDelete"
+                @click="$emit('confirm-delete')"
+                >
+                  Delete
+              </el-button>
+            </el-col>
+            <el-col :span="6">
+              <el-button
+                class="delete-button"
+                @click="$emit('cancel-create')"
+                >
+                  Dismiss
+              </el-button>
+            </el-col>
+          </el-row>
+        </div>
       </template>
     </el-popover>
   </div>
 </template>
 
 <script>
+import { shallowRef } from 'vue';
 /* eslint-disable no-alert, no-console */
-import { ElPopover as Popover } from "element-plus";
-import CreateTooltiipContent from "./CreateTooltipContent.vue";
-import { Tooltip } from "@abi-software/flatmapvuer";
-import "@abi-software/flatmapvuer/dist/style.css";
+import {
+  ElCol as Col,
+  ElIcon as Icon,
+  ElPopover as Popover,
+  ElRow as Row,
+} from "element-plus";
+import {
+  Delete as ElIconDelete,
+} from '@element-plus/icons-vue'
 import { mapState } from 'pinia';
 import { useMainStore } from "@/store/index";
+import { CreateTooltipContent, Tooltip } from '@abi-software/map-utilities'
+import '@abi-software/map-utilities/dist/style.css'
 
 /**
  * A component to control the opacity of the target object.
@@ -47,8 +78,12 @@ import { useMainStore } from "@/store/index";
 export default {
   name: "ScaffoldTooltip",
   components: {
-    CreateTooltiipContent,
+    Col,
+    CreateTooltipContent,
+    ElIconDelete,
+    Icon,
     Popover,
+    Row,
     Tooltip,
   },
   props: {
@@ -67,6 +102,14 @@ export default {
       default: "",
     },
     annotationDisplay: {
+      type: Boolean,
+      default: false,
+    },
+    annotationFeature: {
+      type: Object,
+      default: {},
+    },
+    offlineAnnotationEnabled: {
       type: Boolean,
       default: false,
     },
@@ -96,7 +139,8 @@ export default {
   data: function () {
     return {
       display: false,
-      annotationEntry: { }
+      annotationEntry: [],
+      ElIconDelete: shallowRef(ElIconDelete),
     };
   },
   computed: {
@@ -116,22 +160,22 @@ export default {
         this.display = true;
         if (this.annotationDisplay) {
           const region = this.region ? this.region +"/" : "";
-          this.annotationEntry = {
-            "featureId": encodeURIComponent(region + this.label),
-            "resourceId": encodeURIComponent(this.scaffoldUrl),
-            "resource": encodeURIComponent(this.scaffoldUrl),
-          };
+          this.annotationEntry = [{
+            "featureId": region + this.label,
+            "resourceId": this.scaffoldUrl,
+            "resource": this.scaffoldUrl,
+            "feature": this.annotationFeature,
+            "offline": this.offlineAnnotationEnabled,
+          }];
         }
       }
       else {
         this.display = false;
-        this.annotationEntry = { };
+        this.annotationEntry = [];
       }
     },
     hideTriggered: function() {
-      if (this.createData.toBeConfirmed) {
-        this.$emit('cancel-create');
-      }
+      this.$emit('tooltip-hide');
     },
   },
   watch: {
@@ -174,7 +218,7 @@ export default {
     border-radius: 4px;
     white-space: nowrap;
     min-width: unset!important;
-    max-width:330px;
+    max-width:fit-content;
     width:unset!important;
     pointer-events: none;
     top: -15px !important;
@@ -204,6 +248,24 @@ export default {
     }
     &::before, &::after {
       display:none;
+    }
+  }
+
+  .delete-container {
+    margin-top: 12px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    .delete-button {
+      pointer-events: auto;
+      cursor: pointer;
+      margin-left:8px;
+      padding-left: 8px;
+      padding-right: 8px;
+      height: 24px !important;
+      color: $app-primary-color;
+      &:hover {
+        background-color: var(--el-color-primary-light-9);
+      }
     }
   }
 }

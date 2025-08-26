@@ -1,6 +1,6 @@
 <template>
   <div
-    v-show="material || isTextureSlides"
+    v-show="hasValidPrimitive"
     class="primitive-controls"
     :class="{ open: drawerOpen, close: !drawerOpen }"
   >
@@ -12,7 +12,7 @@
             :zincObject="zincObject"
             ref="opacityControls" />
         </el-collapse-item>
-        <el-collapse-item title="Transformation" name="trControls">
+        <el-collapse-item v-show="!isEditable" title="Transformation" name="trControls">
           <transformation-controls
             class="transformation-controls"
             ref="transformationControls" />
@@ -25,13 +25,18 @@
         <el-collapse-item v-show="isPointset" title="Points" name="pControls">
           <points-controls
             class="pointset-controls"
-            ref="pointsetControls" />
+            ref="pointsetControls"
+            @primitivesUpdated="$emit('primitivesUpdated', $event)"
+          />
         </el-collapse-item>
         <el-collapse-item v-show="isLines" title="Lines" name="lControls">
           <lines-controls
             class="lines-controls"
             ref="linesControls"
-            :createData="createData" />
+            :createData="createData"
+            :usageConfig="usageConfig"
+            @primitivesUpdated="$emit('primitivesUpdated', $event)"
+          />
         </el-collapse-item>
       </el-collapse>
     </div>
@@ -47,7 +52,7 @@
 
 <script>
 /* eslint-disable no-alert, no-console */
-import { ref, shallowRef } from 'vue';
+import { markRaw } from 'vue';
 import {
   ArrowRight as ElIconArrowRight,
 } from '@element-plus/icons-vue';
@@ -81,6 +86,13 @@ export default {
     createData: {
       type: Object,
     },
+    viewingMode: {
+      type: String,
+      default: "Exploration",
+    },
+    usageConfig: {
+      type: Object,
+    }
   },
   data: function() {
     return {
@@ -91,7 +103,17 @@ export default {
       isLines: false,
       drawerOpen: true,
       zincObject: undefined,
+      isEditable: false,
+      displayString: "100%"
     };
+  },
+  computed: {
+    hasValidPrimitive: function () {
+      if (this.viewingMode === 'Exploration' || this.viewingMode === 'Annotation') {
+        return (this.material !== undefined || this.isTextureSlides === true);
+      }
+      return false;
+    }
   },
   methods: {
     formatTooltip: function(val) {
@@ -103,14 +125,15 @@ export default {
     },
     setObject: function(object) {
       if (object) {
-        this.zincObject = shallowRef(object);
+        this.zincObject = markRaw(object);
       } else {
         this.zincObject = undefined;
       }
+      this.isEditable = this.zincObject?.isEditable ? true : false;
       this.isPointset = false;
       this.isTextureSlides = false;
       this.isLines = false;
-      this.activeName  = "oControls";
+      this.activeName  = "trControls";
       if (object) {
         if (object.isTextureSlides) {
           this.isTextureSlides = true;
@@ -120,17 +143,16 @@ export default {
           this.isPointset = true;
           this.$refs.pointsetControls.setObject(object);
           this.activeName = "pControls";
-        } else if (object.isLines2) {
+        } else if (object.isLines2 || (object.isTubeLines && 
+          this.usageConfig?.showTubeLinesControls)) {
           this.isLines = true;
           this.$refs.linesControls.setObject(object);
           this.activeName = "lControls";
         }
-        if (!object.isTextureSlides) {
-          this.$refs.transformationControls.setObject(object);
-        }
+        this.$refs.transformationControls.setObject(object);
       }
       if (object && object.getMorph()) {
-        this.material = ref(object.getMorph().material);
+        this.material = object.getMorph().material;
       } else {
         this.material = undefined;
       }
