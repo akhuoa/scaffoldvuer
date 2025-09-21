@@ -100,7 +100,7 @@
           <ScaffoldTreeControls
             ref="scaffoldTreeControls"
             :isReady="isReady"
-            :show-colour-picker="showColourPicker"
+            :show-colour-picker="enableColourPicker"
             @object-selected="objectSelected"
             @object-hovered="objectHovered"
             @drawer-toggled="drawerToggled"
@@ -111,6 +111,7 @@
         <primitive-controls
           ref="primitiveControls"
           :createData="createData"
+          :viewingMode="viewingMode"
           @primitivesUpdated="primitivesUpdated"
         />
       </div>
@@ -288,7 +289,7 @@
         ref="backgroundPopover"
         :virtual-ref="backgroundIconRef"
         placement="top-start"
-        width="128"
+        width="320"
         :teleported="false"
         trigger="click"
         popper-class="background-popper non-selectable h-auto"
@@ -316,6 +317,30 @@
             <el-row v-if="viewingMode === 'Annotation' && offlineAnnotationEnabled" class="viewing-mode-description">
               (Anonymous annotate)
             </el-row>
+          </el-row>
+          <el-row class="backgroundSpacer"></el-row>
+          <el-row class="backgroundText">Organs display</el-row>
+          <el-row class="backgroundControl">
+            <el-radio-group
+              v-model="colourRadio"
+              class="scaffold-radio"
+              @change="setColour(colourRadio, true)"
+            >
+              <el-radio :value="true">Colour</el-radio>
+              <el-radio :value="false">Greyscale</el-radio>
+            </el-radio-group>
+          </el-row>
+          <el-row class="backgroundSpacer"></el-row>
+          <el-row class="backgroundText">Outlines display</el-row>
+          <el-row class="backgroundControl">
+            <el-radio-group
+              v-model="outlinesRadio"
+              class="scaffold-radio"
+              @change="setOutlines(outlinesRadio, true)"
+            >
+              <el-radio :value="true">Show</el-radio>
+              <el-radio :value="false">Hide</el-radio>
+            </el-radio-group>
           </el-row>
           <el-row class="backgroundSpacer"></el-row>
           <el-row class="backgroundText"> Change background </el-row>
@@ -413,11 +438,12 @@ import {
   findObjectsWithNames,
   updateBoundingBox,
 } from "../scripts/Utilities.js";
-
 import {
   ElButton as Button,
   ElCol as Col,
   ElLoading as Loading,
+  ElRadio as Radio,
+  ElRadioGroup as RadioGroup,
   ElOption as Option,
   ElPopover as Popover,
   ElRow as Row,
@@ -432,6 +458,9 @@ import { OrgansViewer } from "../scripts/OrgansRenderer.js";
 import { SearchIndex } from "../scripts/Search.js";
 import { mapState } from 'pinia';
 import { useMainStore } from "@/store/index";
+import { getNerveMaps } from "../scripts/MappedNerves.js";
+const nervesMap = getNerveMaps();
+let totalNerves = 0, foundNerves = 0;
 
 /**
  * A vue component of the scaffold viewer.
@@ -447,6 +476,8 @@ export default {
     Loading,
     Option,
     Popover,
+    Radio,
+    RadioGroup,
     Row,
     Select,
     Slider,
@@ -644,6 +675,15 @@ export default {
       default: false,
     },
     /**
+     * Define what is considered as nerves.
+     */
+    isNerves: {
+      type: Object,
+      default: {
+        regions: ["nerves"]
+      },
+    },
+    /**
      * This array populate the the openMapOptions popup.
      * Each entry contains a pair of display and key.
      */
@@ -732,6 +772,7 @@ export default {
   data: function () {
     return {
       annotator: undefined,
+      colourRadio: true,
       createData: {
         drawingBox: false,
         toBeConfirmed: false,
@@ -808,6 +849,7 @@ export default {
       currentSpeed: 1,
       timeStamps: {},
       defaultCheckedKeys: [],
+      outlinesRadio: true,
       tData: {
         label: "",
         region: "",
@@ -821,6 +863,7 @@ export default {
       viewingMode: "Exploration",
       viewingModes: {
         "Exploration": "View and explore detailed visualization of 3D scaffolds",
+        "Neuron Connection": "Discover nerve connections by selecting a nerve and viewing its associated connections",
         "Annotation": ['View feature annotations', 'Add, comment on and view feature annotations'],
       },
       openMapRef: undefined,
@@ -846,7 +889,8 @@ export default {
         region: "",
         group: "",
         isSearch: false,
-      })
+      }),
+      //checkedRegions: []
     };
   },
   watch: {
@@ -979,6 +1023,9 @@ export default {
       return this.viewingMode === 'Annotation' && this.tData.active === true &&
         (this.activeDrawMode !== "Point" && this.activeDrawMode !== 'LineString');
     },
+    enableColourPicker: function() {
+      return this.showColourPicker && this.colourRadio;
+    },
     modeDescription: function () {
       let description = this.viewingModes[this.viewingMode];
       if (this.viewingMode === 'Annotation') {
@@ -991,6 +1038,91 @@ export default {
     },
   },
   methods: {
+    /*
+    setCheckedRegions: function (data) {
+      this.checkedRegions = data;
+    },
+    */
+    /**
+     *
+     * @param nerves array of nerve names, show all nerves if empty
+     * @param processed boolean, whether unselect all checkboxes
+     */
+    zoomToNerves: function (nerves, processed = false) {
+      if (this.$module.scene) {
+        const nervesList = [];
+        let nervesUUID = undefined;
+        const regions = this.$module.scene.getRootRegion().getChildRegions();
+        regions.forEach((region) => {
+          const regionName = region.getName();
+          if (processed) {
+            if (regionName === 'Nerves') {
+              if (nerves.length) {
+                const ids = nerves.forEach((nerve) => {
+                  const primitives = this.findObjectsWithGroupName(nerve)
+                  nervesList.push(...primitives);
+                  primitives.forEach((primitive) => {
+                    primitive.setVisibility(true);
+                    nervesList.push(primitive);
+                    if (!nervesUUID) nervesUUID = primitive.region.uuid;
+                  });
+                });
+              }
+            }
+          }
+        });
+        if (nervesList.length) {
+          let box = this.$module.scene.getBoundingBoxOfZincObjects(nervesList);
+          if (box) this.$module.scene.viewAllWithBoundingBox(box);
+        }
+        if (nervesUUID) {
+          this.$refs.scaffoldTreeControls.setCheckedKeys([nervesUUID], false);
+        }
+      }
+
+      //The following hide all the other primitives
+      /*
+      if (this.$module.scene) {
+        const idsList = [];
+        const regions = this.$module.scene.getRootRegion().getChildRegions();
+        regions.forEach((region) => {
+          const regionName = region.getName();
+          if (processed) {
+            region.hideAllPrimitives();
+            if (regionName === 'Nerves') {
+              if (nerves.length) {
+                const ids = nerves.reduce((acc, nerve) => {
+                  const primitives = this.findObjectsWithGroupName(nerve)
+                  const ids = primitives.map((object) => {
+                    object.setVisibility(true);
+                    return `${object.region.uuid}/${object.uuid}`;
+                  });
+                  acc.push(...ids);
+                  return acc;
+                }, []);
+                idsList.push(...ids)
+              } else {
+                region.showAllPrimitives();
+                idsList.push(region.uuid)
+              }
+            }
+          } else {
+            // if the checkboxes are checked previously, restore them
+            const isChecked = this.checkedRegions.find(item => item.label === regionName);
+            if (isChecked) {
+              region.showAllPrimitives();
+              idsList.push(region.uuid);
+            }
+          }
+
+        });
+        if (nerves.length) {
+          this.fitWindow();
+        }
+        this.$refs.scaffoldTreeControls.setCheckedKeys(idsList, processed);
+      }
+      */
+    },
     enableAxisDisplay: function (enable, miniaxes) {
       if (this.$module.scene) {
         this.$module.scene.enableAxisDisplay(enable, miniaxes);
@@ -1022,6 +1154,25 @@ export default {
       this.$_searchIndex.addZincObject(zincObject, zincObject.uuid);
       if (this.timeVarying === false && zincObject.isTimeVarying()) {
         this.timeVarying = true;
+      }
+      //Temporary way to mark an object as nerves
+      const regions = this.isNerves?.regions;
+      if (regions) {
+        const regionPath = zincObject.getRegion().getFullPath().toLowerCase();
+        for (let i = 0; i < regions.length; i++) {
+          if (regionPath.includes(regions[i].toLowerCase())) {
+            zincObject.userData.isNerves = true;
+            const groupName = zincObject.groupName.toLowerCase();
+            if (groupName in nervesMap) {
+              foundNerves++;
+              zincObject.setAnatomicalId(nervesMap[groupName]);
+              //console.log(groupName, zincObject.anatomicalId, zincObject.uuid)
+            }
+          } else {
+            zincObject.userData.isNerves = false;
+          }
+        }
+
       }
       /**
        * Emit when a new object is added to the scene
@@ -1725,11 +1876,13 @@ export default {
      * @arg objects objects to be set for the selected
      */
     updatePrimitiveControls: function (objects) {
-      this.selectedObjects = objects;
-      if (this.selectedObjects && this.selectedObjects.length > 0) {
-        this.$refs.primitiveControls.setObject(this.selectedObjects[0]);
-      } else {
-        this.$refs.primitiveControls.setObject(undefined);
+      if (this.viewingMode === 'Exploration' || this.viewingMode === 'Annotation') {
+        this.selectedObjects = objects;
+        if (this.selectedObjects && this.selectedObjects.length > 0) {
+          this.$refs.primitiveControls.setObject(this.selectedObjects[0]);
+        } else {
+          this.$refs.primitiveControls.setObject(undefined);
+        }
       }
     },
     /**
@@ -2071,6 +2224,7 @@ export default {
      * Optional, can be used to update the view mode.
      */
     changeViewingMode: function (modeName) {
+      let nonNervesIsPickable = true;
       if (this.$module) {
         if (modeName) {
           this.viewingMode = modeName;
@@ -2090,12 +2244,14 @@ export default {
             this.addAnnotationFeature();
             this.loading = false;
           });
-        } else {
-          if (this.viewingMode === "Exploration") {
-            this.activeDrawTool = undefined;
-            this.activeDrawMode = undefined;
-            this.createData.shape = "";
-          }
+        } else if (this.viewingMode === "Exploration") {
+          this.activeDrawTool = undefined;
+          this.activeDrawMode = undefined;
+          this.createData.shape = "";
+        } else if (this.viewingMode === "Neuron Connection") {
+          // TODO: to review
+          // enable to make organs and nerves clickable and searchable for neuron connection mode
+          // nonNervesIsPickable = false;
         }
         if ((this.viewingMode === "Exploration") ||
           (this.viewingMode === "Annotation") &&
@@ -2105,6 +2261,9 @@ export default {
           this.$module.selectObjectOnPick = false;
         }
         this.cancelCreate();
+        if (modeName) {
+          this.setNonNervesIsPickable(nonNervesIsPickable);
+        }
       }
     },
     /**
@@ -2128,6 +2287,69 @@ export default {
       this.tData.active = false;
       this.tData.visible = false;
       this.tData.region = undefined;
+    },
+    /**
+     * Currently will only apply to non-nerve object
+     * @param flag boolean to control whether objects pickable
+     */
+    setNonNervesIsPickable: function (flag) {
+      const objects = this.$module.scene.getRootRegion().getAllObjects(true);
+      objects.forEach((zincObject) => {
+        if (!zincObject.userData.isNerves) zincObject.setIsPickable(flag);
+      });
+    },
+    /**
+     *
+     * @param flag boolean
+     * @param nerves array of nerve names
+     */
+    setGreyScale: function (flag, nerves = []) {
+      const objects = this.$module.scene.getRootRegion().getAllObjects(true);
+      objects.forEach((zincObject) => {
+        if (nerves.length) {
+          const groupName = zincObject.groupName.toLowerCase();
+          if (zincObject.userData.isNerves) {
+            if (!nerves.includes(groupName)) zincObject.setGreyScale(flag);
+          }
+        } else {
+          if (!zincObject.userData.isNerves) zincObject.setGreyScale(flag);
+        }
+      });
+      this.$refs.scaffoldTreeControls.updateAllNodeColours();
+    },
+    /**
+     * @public
+     * Function to toggle colour/greyscale of primitives.
+     * The parameter ``flag`` is a boolean, ``true`` (colour) and ``false`` (greyscale).
+     * @arg {Boolean} `flag`
+     */
+    setColour: function (flag, forced = false) {
+      if (this.isReady && this.$module.scene &&
+        typeof flag === "boolean" &&
+        (forced || flag !== this.colourRadio)) {
+        this.loading = true;
+        //This can take sometime to finish , nextTick does not bring out
+        //the loading screen so I opt for timeout loop here.
+        setTimeout(() => {
+          this.setGreyScale(!flag)
+          this.loading = false;
+          this.colourRadio = flag;
+        }, 100);
+      }
+    },
+    /**
+     * @public
+     * Function to toggle lines graphics.
+     * The parameter ``flag`` is a boolean, ``true`` to show lines, ``false`` to hide them.
+     * @arg {Boolean} `flag`
+     */
+     setOutlines: function (flag, forced = false) {
+      if (this.isReady && this.$module.scene &&
+        typeof flag === "boolean" &&
+        (forced || flag !== this.outlinesRadio)) {
+        this.outlinesRadio = flag;
+        this.$nextTick(() => this.$refs.scaffoldTreeControls.setOutlines(flag));
+      }
     },
     /**
      * Set the marker modes for objects with the provided name, mode can
@@ -2289,8 +2511,14 @@ export default {
         if (options.background) {
           this.backgroundChangeCallback(options.background);
         }
+        if ("colour" in options) {
+          this.setColour(options.colour);
+        }
         if (options.offlineAnnotations) {
           sessionStorage.setItem('anonymous-annotation', options.offlineAnnotations);
+        }
+        if ("outlines" in options) {
+          this.setOutlines(options.outlines);
         }
         if (options.viewingMode) {
           this.changeViewingMode(options.viewingMode);
@@ -2321,7 +2549,6 @@ export default {
         /**
          * Emit when all objects have been loaded
          */
-        this.$emit("on-ready");
         this.setMarkers();
         //Create a bounding box.
         this._boundingBoxGeo = this.$module.scene.addBoundingBoxPrimitive(
@@ -2333,10 +2560,14 @@ export default {
         const {centre, size} = this.$module.getCentreAndSize();
         this.boundingDims.centre = centre;
         this.boundingDims.size = size;
-        this.$nextTick(() => this.restoreSettings(options) );
         //this.$module.scene.createAxisDisplay(false);
         //this.$module.scene.enableAxisDisplay(true, true);
         this.isReady = true;
+        //console.log(`Total ${totalNerves}, found ${foundNerves}`);
+        this.$nextTick(() => {
+          this.restoreSettings(options);
+          this.$emit("on-ready");
+        });
       };
     },
     /**
@@ -2352,6 +2583,8 @@ export default {
         viewport: undefined,
         visibility: undefined,
         background: this.currentBackground,
+        colour: this.colourRadio,
+        outlines: this.outlinesRadio,
         viewingMode: this.viewingMode,
       };
       if (this.$refs.scaffoldTreeControls)
@@ -2383,23 +2616,28 @@ export default {
             viewport: state.viewport,
             visibility: state.visibility,
             background: state.background,
+            colour: state.colour,
+            outlines: state.outlines,
             viewingMode: state.viewingMode,
             search: state.search,
             offlineAnnotations: state.offlineAnnotations,
           });
         } else {
-          if (state.background || state.search || state.viewport || state.viewingMode || state.visibility) {
+          if (state.background || state.colour || state.search || state.outlines ||
+          state.viewport || state.viewingMode || state.visibility) {
             if (this.isReady && this.$module.scene) {
               this.restoreSettings(state);
             } else {
               this.$module.setFinishDownloadCallback(
                 this.setURLFinishCallback({
                   background: state.background,
+                  colour: state.colour,
+                  search: state.search,
+                  offlineAnnotations: state.offlineAnnotations,
+                  outlines: state.outlines,
                   viewingMode: state.viewingMode,
                   viewport: state.viewport,
                   visibility: state.visibility,
-                  search: state.search,
-                  offlineAnnotations: state.offlineAnnotations,
                 })
               );
             }
@@ -2483,6 +2721,8 @@ export default {
         this.$module.setFinishDownloadCallback(
           this.setURLFinishCallback({
             background: state?.background,
+            colour: state?.colour,
+            outlines: state?.outlines,
             region: this.region,
             search: state?.search,
             viewingMode: state?.viewingMode,
@@ -2918,6 +3158,30 @@ export default {
     }
   }
 }
+
+.scaffold-radio {
+  :deep(label) {
+    margin-right: 20px;
+    &:last-child {
+      margin-right: 0px;
+    }
+  }
+  :deep(.el-radio__input) {
+    &.is-checked {
+      & + .el-radio__label {
+        color: $app-primary-color;
+      }
+      .el-radio__inner {
+        border-color: $app-primary-color;
+        background: $app-primary-color;
+      }
+    }
+    .el-radio__inner:hover {
+      border-color: $app-primary-color;
+    }
+  }
+}
+
 
 :deep(.scaffold-popper.el-popper.el-popper) {
   padding: 6px 4px;
