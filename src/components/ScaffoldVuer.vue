@@ -1,10 +1,12 @@
 <template>
-  <div
+  <scaffold-overlay
     ref="scaffoldContainer"
     v-loading="loading"
     class="scaffold-container"
     element-loading-text="Loading..."
     element-loading-background="rgba(0, 0, 0, 0.3)"
+    :positionalRotation="positionalRotation"
+    @onRotationModeChange="setRotationMode"
   >
     <map-svg-sprite-color />
     <scaffold-tooltip
@@ -33,6 +35,7 @@
     <div v-show="displayUI && !isTransitioning">
       <DrawToolbar
         v-if="viewingMode === 'Annotation' && (authorisedUser || offlineAnnotationEnabled)"
+        class="control-layer"
         :toolbarOptions="toolbarOptions"
         :activeDrawTool="activeDrawTool"
         :activeDrawMode="activeDrawMode"
@@ -55,7 +58,7 @@
         <template #reference>
           <div
             v-if="displayWarning"
-            class="message-icon warning-icon"
+            class="message-icon warning-icon control-layer"
             @mouseover="showHelpText(7)"
             @mouseout="hideHelpText(7)"
           >
@@ -77,7 +80,7 @@
         <template #reference>
           <div
             v-if="displayLatestChanges && latestChangesMessage"
-            class="el-icon-warning message-icon latest-changesicon"
+            class="el-icon-warning message-icon latest-changesicon control-layer"
             @mouseover="showHelpText(8)"
             @mouseout="hideHelpText(8)"
           >
@@ -98,6 +101,7 @@
       >
         <template #reference>
           <ScaffoldTreeControls
+            class="control-layer"
             ref="scaffoldTreeControls"
             :isReady="isReady"
             :show-colour-picker="enableColourPicker"
@@ -109,9 +113,11 @@
       </el-popover>
       <div class="primitive-controls-box">
         <primitive-controls
+          class="control-layer"
           ref="primitiveControls"
           :createData="createData"
           :viewingMode="viewingMode"
+          :usageConfig="usageConfig"
           @primitivesUpdated="primitivesUpdated"
         />
       </div>
@@ -129,7 +135,7 @@
         <template #reference>
           <div
             v-if="timeVarying"
-            class="time-slider-container"
+            class="time-slider-container control-layer"
             :class="[minimisedSlider ? 'minimised' : '', sliderPosition]"
           >
             <el-tabs type="card">
@@ -198,7 +204,7 @@
           </div>
         </template>
       </el-popover>
-      <div class="bottom-right-control">
+      <div class="bottom-right-control control-layer">
         <el-popover
           :visible="hoverVisibilities[0].value"
           content="Zoom in"
@@ -295,7 +301,7 @@
         popper-class="background-popper non-selectable h-auto"
         virtual-triggering
       >
-        <div>
+        <div class="control-layer">
           <el-row class="backgroundText">Viewing Mode</el-row>
           <el-row class="backgroundControl">
             <div style="margin-bottom: 2px;">
@@ -359,7 +365,7 @@
         </div>
       </el-popover>
       <div
-        class="settings-group"
+        class="settings-group control-layer"
         :class="{ open: drawerOpen, close: !drawerOpen }"
       >
         <el-row v-if="showOpenMapButton">
@@ -409,7 +415,7 @@
         </el-row>
       </div>
     </div>
-  </div>
+  </scaffold-overlay>
 </template>
 
 <script>
@@ -421,6 +427,7 @@ import {
   ArrowLeft as ElIconArrowLeft,
 } from '@element-plus/icons-vue'
 import PrimitiveControls from "./PrimitiveControls.vue";
+import ScaffoldOverlay from "./ScaffoldOverlay.vue";
 import ScaffoldTooltip from "./ScaffoldTooltip.vue";
 import ScaffoldTreeControls from "./ScaffoldTreeControls.vue";
 import { MapSvgIcon, MapSvgSpriteColor } from "@abi-software/svg-sprite";
@@ -456,11 +463,20 @@ import { AnnotationService } from '@abi-software/sparc-annotation';
 import { EventNotifier } from "../scripts/EventNotifier.js";
 import { OrgansViewer } from "../scripts/OrgansRenderer.js";
 import { SearchIndex } from "../scripts/Search.js";
-import { mapState } from 'pinia';
+import { mapState, mapStores } from 'pinia';
 import { useMainStore } from "@/store/index";
 import { getNerveMaps } from "../scripts/MappedNerves.js";
+import { getOrganMaps } from '../scripts/MappedOrgans.js';
 const nervesMap = getNerveMaps();
-let totalNerves = 0, foundNerves = 0;
+const organsMap = getOrganMaps();
+let foundNerves = 0;
+
+const haveSameElements = (arr1, arr2) => {
+  if (arr1.length !== arr2.length) return false;
+  return arr1.sort().every((value, index) => {
+    return value === arr2.sort()[index]
+  });
+}
 
 /**
  * A vue component of the scaffold viewer.
@@ -479,6 +495,7 @@ export default {
     Radio,
     RadioGroup,
     Row,
+    ScaffoldOverlay,
     Select,
     Slider,
     TabPane,
@@ -675,12 +692,22 @@ export default {
       default: false,
     },
     /**
+     * Experimental feature to restrict rotation at
+     * one-axis based on position of the initial click
+     */
+    positionalRotation: {
+      type: Boolean,
+      default: false,
+    },
+    /**
      * Define what is considered as nerves.
      */
     isNerves: {
       type: Object,
-      default: {
-        regions: ["nerves"]
+      default: function () {
+        return {
+          regions: ["nerves"]
+        };
       },
     },
     /**
@@ -760,6 +787,18 @@ export default {
     showOpenMapButton: {
       type: Boolean,
       default: true,
+    },
+    /**
+     * Manage the settings when used in standalone or as child component.
+     */
+    usageConfig: {
+      type: Object,
+      default: function () {
+        return {
+          showTubeLinesControls: true,
+          tubeLines: false,
+        };
+      },
     },
   },
   provide() {
@@ -1003,7 +1042,7 @@ export default {
     this.$module.initialiseRenderer(this.$refs.display);
     this.toggleRendering(this.render);
     this.ro = new ResizeObserver(this.adjustLayout).observe(
-      this.$refs.scaffoldContainer
+      this.$refs.scaffoldContainer.$el
     );
     this.helpTextWait = [];
     this.helpTextWait.length = this.hoverVisibilities.length;
@@ -1018,6 +1057,7 @@ export default {
     this.$module = undefined;
   },
   computed: {
+    ...mapStores(useMainStore),
     ...mapState(useMainStore,  ['userToken']),
     annotationDisplay: function() {
       return this.viewingMode === 'Annotation' && this.tData.active === true &&
@@ -1050,78 +1090,23 @@ export default {
      */
     zoomToNerves: function (nerves, processed = false) {
       if (this.$module.scene) {
+        this.$module.setIgnorePicking(processed);
         const nervesList = [];
-        let nervesUUID = undefined;
         const regions = this.$module.scene.getRootRegion().getChildRegions();
         regions.forEach((region) => {
           const regionName = region.getName();
-          if (processed) {
-            if (regionName === 'Nerves') {
-              if (nerves.length) {
-                const ids = nerves.forEach((nerve) => {
-                  const primitives = this.findObjectsWithGroupName(nerve)
-                  nervesList.push(...primitives);
-                  primitives.forEach((primitive) => {
-                    primitive.setVisibility(true);
-                    nervesList.push(primitive);
-                    if (!nervesUUID) nervesUUID = primitive.region.uuid;
-                  });
-                });
-              }
+          if (regionName === 'Nerves') {
+            if (processed) {
+              nerves.forEach((nerve) => {
+                const primitives = this.findObjectsWithGroupName(nerve);
+                nervesList.push(...primitives);
+              });
             }
           }
         });
-        if (nervesList.length) {
-          let box = this.$module.scene.getBoundingBoxOfZincObjects(nervesList);
-          if (box) this.$module.scene.viewAllWithBoundingBox(box);
-        }
-        if (nervesUUID) {
-          this.$refs.scaffoldTreeControls.setCheckedKeys([nervesUUID], false);
-        }
+        this.$module.setSelectedByZincObjects(nervesList, undefined, {}, true);
+        this.$module.scene.viewAll();
       }
-
-      //The following hide all the other primitives
-      /*
-      if (this.$module.scene) {
-        const idsList = [];
-        const regions = this.$module.scene.getRootRegion().getChildRegions();
-        regions.forEach((region) => {
-          const regionName = region.getName();
-          if (processed) {
-            region.hideAllPrimitives();
-            if (regionName === 'Nerves') {
-              if (nerves.length) {
-                const ids = nerves.reduce((acc, nerve) => {
-                  const primitives = this.findObjectsWithGroupName(nerve)
-                  const ids = primitives.map((object) => {
-                    object.setVisibility(true);
-                    return `${object.region.uuid}/${object.uuid}`;
-                  });
-                  acc.push(...ids);
-                  return acc;
-                }, []);
-                idsList.push(...ids)
-              } else {
-                region.showAllPrimitives();
-                idsList.push(region.uuid)
-              }
-            }
-          } else {
-            // if the checkboxes are checked previously, restore them
-            const isChecked = this.checkedRegions.find(item => item.label === regionName);
-            if (isChecked) {
-              region.showAllPrimitives();
-              idsList.push(region.uuid);
-            }
-          }
-
-        });
-        if (nerves.length) {
-          this.fitWindow();
-        }
-        this.$refs.scaffoldTreeControls.setCheckedKeys(idsList, processed);
-      }
-      */
     },
     enableAxisDisplay: function (enable, miniaxes) {
       if (this.$module.scene) {
@@ -1155,6 +1140,20 @@ export default {
       if (this.timeVarying === false && zincObject.isTimeVarying()) {
         this.timeVarying = true;
       }
+      const groupName = zincObject.groupName.toLowerCase();
+      if (groupName in organsMap) {
+        zincObject.setAnatomicalId(organsMap[groupName]);
+      }
+      const morph = zincObject.getGroup();
+      if (morph && morph.position) {
+        zincObject.userData.originalPos = [
+          morph.position.x,
+          morph.position.y,
+          morph.position.z
+        ];
+      } else {
+        zincObject.userData.originalPos = [0, 0, 0];
+      }
       //Temporary way to mark an object as nerves
       const regions = this.isNerves?.regions;
       if (regions) {
@@ -1162,17 +1161,16 @@ export default {
         for (let i = 0; i < regions.length; i++) {
           if (regionPath.includes(regions[i].toLowerCase())) {
             zincObject.userData.isNerves = true;
-            const groupName = zincObject.groupName.toLowerCase();
+            zincObject.userData.defaultColour = `#${zincObject.getColourHex()}`;
+            zincObject.userData.isGreyScale = false;
             if (groupName in nervesMap) {
               foundNerves++;
               zincObject.setAnatomicalId(nervesMap[groupName]);
-              //console.log(groupName, zincObject.anatomicalId, zincObject.uuid)
             }
           } else {
             zincObject.userData.isNerves = false;
           }
         }
-
       }
       /**
        * Emit when a new object is added to the scene
@@ -1584,6 +1582,12 @@ export default {
         }
       }
     },
+    setRotationMode: function(mode) {
+      if (this.$module.scene) {
+        const cameracontrol = this.$module.scene.getZincCameraControls();
+        cameracontrol.setRotationMode(mode);
+      }
+    },
     updateViewURL: function (viewURL) {
       if (viewURL) {
         if (this.isReady) {
@@ -1780,16 +1784,21 @@ export default {
                 this.$refs.scaffoldTreeControls.removeActive(false);
               }
             }
+
             //Store the following for state saving. Search will handle the case with more than 1
             //identifiers.
             if (event.identifiers.length === 1) {
-              this.lastSelected.isSearch = false;
-              this.lastSelected.region = regionPath;
-              this.lastSelected.group = event.identifiers[0].data.group;
+              this.lastSelected = {
+                isSearch: false,
+                region: regionPath,
+                group: event.identifiers[0].data.group,
+              }
             } else if (event.identifiers.length === 0) {
-              this.lastSelected.isSearch = false;
-              this.lastSelected.region = "";
-              this.lastSelected.group = "";
+              this.lastSelected = {
+                isSearch: false,
+                region: "",
+                group: "",
+              }
             }
             /**
              * Emit when an object is selected
@@ -1831,7 +1840,7 @@ export default {
           if (event.identifiers.length > 0 && event.identifiers[0]) {
             if (event.identifiers[0].coords) {
               const offsets =
-                this.$refs.scaffoldContainer.getBoundingClientRect();
+                this.$refs.scaffoldContainer.$el.getBoundingClientRect();
               this.tData.x = event.identifiers[0].coords.x - offsets.left;
               this.tData.y = event.identifiers[0].coords.y - offsets.top;
             }
@@ -1893,6 +1902,7 @@ export default {
      * is made
      */
     objectSelected: function (objects, propagate) {
+      if (this.$module.isIgnorePicking()) return;
       this.updatePrimitiveControls(objects);
       this.$module.setSelectedByZincObjects(objects, undefined, {}, propagate);
     },
@@ -2224,7 +2234,7 @@ export default {
      * Optional, can be used to update the view mode.
      */
     changeViewingMode: function (modeName) {
-      let nonNervesIsPickable = true;
+      let objectIsPickable = true;
       if (this.$module) {
         if (modeName) {
           this.viewingMode = modeName;
@@ -2249,11 +2259,11 @@ export default {
           this.activeDrawMode = undefined;
           this.createData.shape = "";
         } else if (this.viewingMode === "Neuron Connection") {
-          // TODO: to review
           // enable to make organs and nerves clickable and searchable for neuron connection mode
-          // nonNervesIsPickable = false;
+          objectIsPickable = false;
         }
         if ((this.viewingMode === "Exploration") ||
+          (this.viewingMode === "Neuron Connection") ||
           (this.viewingMode === "Annotation") &&
           (this.createData.shape === "")) {
             this.$module.selectObjectOnPick = true;
@@ -2262,7 +2272,7 @@ export default {
         }
         this.cancelCreate();
         if (modeName) {
-          this.setNonNervesIsPickable(nonNervesIsPickable);
+          this.setObjectIsPickable(objectIsPickable);
         }
       }
     },
@@ -2289,30 +2299,36 @@ export default {
       this.tData.region = undefined;
     },
     /**
-     * Currently will only apply to non-nerve object
+     * Currently will apply to non-nerve object and object without anatomical id
      * @param flag boolean to control whether objects pickable
      */
-    setNonNervesIsPickable: function (flag) {
+    setObjectIsPickable: function (flag) {
       const objects = this.$module.scene.getRootRegion().getAllObjects(true);
       objects.forEach((zincObject) => {
-        if (!zincObject.userData.isNerves) zincObject.setIsPickable(flag);
+        if (!zincObject.userData?.isNerves && !zincObject.anatomicalId) {
+          zincObject.setIsPickable(flag);
+        }
       });
     },
     /**
-     *
+     * Update objects to greyscale or colour.
+     * This will update all objects except those with the provided nerves labels.
      * @param flag boolean
-     * @param nerves array of nerve names
+     * @param labels array of nerve names that exclude from greyscale
      */
-    setGreyScale: function (flag, nerves = []) {
+    setGreyScale: function (flag, labels = []) {
       const objects = this.$module.scene.getRootRegion().getAllObjects(true);
       objects.forEach((zincObject) => {
-        if (nerves.length) {
-          const groupName = zincObject.groupName.toLowerCase();
-          if (zincObject.userData.isNerves) {
-            if (!nerves.includes(groupName)) zincObject.setGreyScale(flag);
-          }
-        } else {
-          if (!zincObject.userData.isNerves) zincObject.setGreyScale(flag);
+        const groupName = zincObject.groupName.toLowerCase();
+        const isNerves = zincObject.userData?.isNerves;
+
+        const shouldUpdate =
+          (labels.length > 0 && isNerves && !labels.includes(groupName)) ||
+          (labels.length === 0 && !isNerves);
+
+        if (shouldUpdate) {
+          zincObject.setGreyScale(flag);
+          zincObject.userData.isGreyScale = flag;
         }
       });
       this.$refs.scaffoldTreeControls.updateAllNodeColours();
@@ -2422,15 +2438,19 @@ export default {
         if (text === undefined || text === "" ||
           ((Array.isArray(text) && text.length === 0))
         ) {
-          this.lastSelected.region = "";
-          this.lastSelected.group = "";
-          this.lastSelected.isSearch = true;
+          this.lastSelected = {
+            region: "",
+            group: "",
+            isSearch: true,
+          }
           this.objectSelected([], true);
           return false;
         } else {
-          this.lastSelected.region = "";
-          this.lastSelected.group = text;
-          this.lastSelected.isSearch = true;
+          this.lastSelected = {
+            region: "",
+            group: text,
+            isSearch: true,
+          }
           const result = this.$_searchIndex.searchAndProcessResult(text);
           const zincObjects = result.zincObjects;
           if (zincObjects.length > 0) {
@@ -2563,7 +2583,7 @@ export default {
         //this.$module.scene.createAxisDisplay(false);
         //this.$module.scene.enableAxisDisplay(true, true);
         this.isReady = true;
-        //console.log(`Total ${totalNerves}, found ${foundNerves}`);
+        //console.log(`found ${foundNerves}`);
         this.$nextTick(() => {
           this.restoreSettings(options);
           this.$emit("on-ready");
@@ -2586,6 +2606,7 @@ export default {
         colour: this.colourRadio,
         outlines: this.outlinesRadio,
         viewingMode: this.viewingMode,
+        usageConfig: this.usageConfig,
       };
       if (this.$refs.scaffoldTreeControls)
         state.visibility = this.$refs.scaffoldTreeControls.getState();
@@ -2707,6 +2728,7 @@ export default {
      */
     setURLAndState: function (newValue, state) {
       if (newValue != this._currentURL) {
+        const options = {};
         if (state?.format) this.fileFormat = state.format;
         this._currentURL = newValue;
         if (this.$refs.scaffoldTreeControls) this.$refs.scaffoldTreeControls.clear();
@@ -2735,13 +2757,17 @@ export default {
         if (this.fileFormat === "gltf") {
           this.$module.loadGLTFFromURL(newValue, "scene", true);
         } else {
+          if (this?.usageConfig?.tubeLines || state?.usageConfig?.tubeLines){
+            options.tubeLines = true;
+          }
           this.$module.loadOrgansFromURL(
             newValue,
             undefined,
             undefined,
             "scene",
             undefined,
-            true
+            true,
+            options
           );
         }
         if (this.$module && this.$module.scene) {
@@ -2773,8 +2799,8 @@ export default {
      * Callback using ResizeObserver.
      */
     adjustLayout: function () {
-      if (this.$refs.scaffoldContainer) {
-        let width = this.$refs.scaffoldContainer.clientWidth;
+      if (this.$refs.scaffoldContainer?.$el) {
+        let width = this.$refs.scaffoldContainer.$el.clientWidth;
         this.minimisedSlider = width < 812;
         if (this.minimisedSlider) {
           this.sliderPosition = this.drawerOpen ? "right" : "left";
@@ -2885,6 +2911,10 @@ export default {
     outline: none !important;
     border: 0px;
   }
+}
+
+.control-layer {
+  z-index: 2;
 }
 
 .time-slider-container {
