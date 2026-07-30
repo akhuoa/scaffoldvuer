@@ -1,5 +1,4 @@
 import path from "path";
-const pathSrc = path.resolve(__dirname, "./src");
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
@@ -12,7 +11,7 @@ export default defineConfig(({ command, mode }) => {
     css: {
         preprocessorOptions: {
           scss: {
-            additionalData: `@use '${pathSrc}/assets/styles' as *;`
+            additionalData: `@use './src/assets/styles' as *;`
           },
         },
     },
@@ -30,7 +29,7 @@ export default defineConfig(({ command, mode }) => {
           ],
           dts: 'src/components.d.ts',
         }),
-    
+
         // https://github.com/antfu/unocss
         // see unocss.config.ts for config
     ],
