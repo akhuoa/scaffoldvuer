@@ -2,6 +2,9 @@
   "name": "@abi-software/scaffoldvuer",
   "version": "1.17.1-beta.1",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/ABI-Software/scaffoldvuer.git"
@@ -70,6 +73,11 @@
     "vite-plugin-node-polyfills": "^0.21.0",
     "vitepress": "^1.0.0-rc.42",
     "vue-docgen-api": "^4.79.2"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "4.62.3",
+    "@rollup/rollup-linux-x64-gnu": "4.62.3",
+    "@rollup/rollup-win32-x64-msvc": "4.62.3"
   },
   "eslintConfig": {
     "root": true,
