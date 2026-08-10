@@ -24,6 +24,13 @@
           @primitivesUpdated="$emit('primitivesUpdated', $event)"
         />
       </el-collapse-item>
+      <el-collapse-item v-show="isGlyph" title="Glyphset" name="gControls">
+        <glyphs-controls
+          class="glyph-controls"
+          ref="glyphControls"
+          @primitivesUpdated="$emit('primitivesUpdated', $event)"
+        />
+      </el-collapse-item>
       <el-collapse-item v-show="isLines" title="Lines" name="lControls">
         <lines-controls
           class="lines-controls"
@@ -51,6 +58,7 @@ import {
 import OpacityControls from "./OpacityControls.vue";
 import PointsControls from "./PointsControls.vue";
 import LinesControls from "./LinesControls.vue";
+import GlyphsControls from "./GlyphsControls.vue";
 import TextureSlidesControls from "./TextureSlidesControls.vue";
 import TransformationControls from "./TransformationControls.vue";
 
@@ -62,6 +70,7 @@ export default {
   components: {
     Collapse,
     CollapseItem,
+    GlyphsControls,
     LinesControls,
     OpacityControls,
     PointsControls,
@@ -88,7 +97,7 @@ export default {
       isTextureSlides: false,
       isPointset: false,
       isLines: false,
-
+      isGlyph: false,
       zincObject: undefined,
       isEditable: false,
       displayString: "100%"
@@ -117,6 +126,7 @@ export default {
       this.isPointset = false;
       this.isTextureSlides = false;
       this.isLines = false;
+      this.isGlyph = false,
       this.activeName  = "trControls";
       if (object) {
         if (object.isTextureSlides) {
@@ -132,6 +142,12 @@ export default {
           this.isLines = true;
           this.$refs.linesControls.setObject(object);
           this.activeName = "lControls";
+        } else if (object.isGlyphset) {
+          if (object.canShowLabel()) {
+            this.isGlyph = true;
+            this.$refs.glyphControls.setObject(object);
+            this.activeName = "gControls";
+          }
         }
         this.$refs.transformationControls.setObject(object);
       }
