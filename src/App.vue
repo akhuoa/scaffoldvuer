@@ -50,7 +50,7 @@
       @show-next="onHelpModeShowNext"
       @finish-help-mode="onFinishHelpMode"
     />
-    <el-popover popper-class="options-container" placement="bottom" trigger="click" width="500" :teleported="false">
+    <el-popover popper-class="options-container" placement="bottom" trigger="hover" width="500" :teleported="false">
       <div>
         <el-row :gutter="20">
           <el-col>
@@ -115,7 +115,9 @@
             </el-button>
           </el-col>
           <el-col :span="auto">
-            <el-button size="small" @click="screenCapture()"> Capture </el-button>
+            <el-button type="primary" size="small" @click="screenshotDialog = true">
+              Screenshot
+            </el-button>
           </el-col>
         </el-row>
 
@@ -299,7 +301,7 @@
         </el-button>
       </template>
     </el-popover>
-    <el-popover placement="bottom" trigger="click" width="800" popper-class="table-popover" :teleported="false">
+    <el-popover placement="bottom" trigger="hover" width="800" popper-class="table-popover" :teleported="false">
       <template #default>
         <Suspense>
           <ModelsTable @viewModelClicked="viewModelClicked" />
@@ -320,6 +322,64 @@
         </div>
       </template>
     </el-autocomplete>
+    <el-dialog
+      v-model="screenshotDialog"
+      title="Screenshot Settings"
+      width="450px"
+      destroy-on-close
+    >
+    <el-form
+      ref="formRef"-
+      :model="screenshotData"
+      :rules="rules"
+      label-width="100px"
+      status-icon
+    >
+      <!-- Filename Field -->
+      <el-form-item label="Filename" prop="filename">
+        <el-input
+          v-model="screenshotData.filename"
+          placeholder="scaffold"
+        >
+          <template #append>.png</template>
+        </el-input>
+      </el-form-item>
+
+      <!-- Width Field -->
+      <el-form-item label="Width (px)" prop="width">
+        <el-input-number
+          v-model="screenshotData.width"
+          :min="100"
+          :max="7680"
+          :step="100"
+          controls-position="right"
+          style="width: 100%"
+        />
+      </el-form-item>
+
+      <!-- Height Field -->
+      <el-form-item label="Height (px)" prop="height">
+        <el-input-number
+          v-model="screenshotData.height"
+          :min="100"
+          :max="4320"
+          :step="100"
+          controls-position="right"
+          style="width: 100%"
+        />
+        </el-form-item>
+      </el-form>
+
+      <!-- Dialog Footer Action Buttons -->
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="screenCancel">Cancel</el-button>
+          <el-button type="primary" :loading="loading" @click="screenCapture">
+            Capture
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -435,6 +495,7 @@ export default {
       helpModeLastItem: false,
       useHelpModeDialog: true,
       scaffoldRef: null,
+      screenshotDialog: false,
       route: useRoute(),
       router: useRouter(),
       ElIconSetting: shallowRef(ElIconSetting),
@@ -443,9 +504,24 @@ export default {
       annotator: markRaw(new AnnotationService(`https://mapcore-demo.org/devel/flatmap/v4/annotator`)),
       fitBoundingBox: false,
       usageConfig: {
+        tubeLines: false,
         showTubeLinesControls: true
       },
-    };
+      screenshotData: {
+        filename: "screenshot",
+        width: 1920,
+        height: 1080
+      },
+      wholeBody: false,
+      rules: {
+        filename: [
+          { required: true, message: 'Please enter a filename', trigger: 'blur' },
+          { pattern: /^[a-zA-Z0-9_-]+$/, message: 'Filename can only contain letters, numbers, hyphens, and underscores', trigger: 'blur' } ],
+          width: [ { required: true, message: 'Please specify width', trigger: 'change' } ],
+          height: [ { required: true, message: 'Please specify height', trigger: 'change' }
+        ]
+      }
+    }
   },
   watch: {
     input: function () {
@@ -544,6 +620,12 @@ export default {
       if (zincObject.isGeometry) {
         zincObject._lod._material.wireframe = this.wireframe;
       }
+      if (this.wholeBody) {
+        if (zincObject.getRegion().getName() === "Nerves") {
+          zincObject.setGreyScale(true);
+        }
+      }
+
       this._objects.push(zincObject);
     },
     openMap: function (map) {
@@ -671,8 +753,16 @@ export default {
     userPrimitivesUpdated: function (event) {
       console.log(event);
     },
+    screenCancel: function () {
+      this.screenshotDialog = false;
+    },
     screenCapture: function () {
-      this.$refs.scaffold.captureScreenshot("capture.png");
+      this.$refs.scaffold.captureScreenshot(
+        this.screenshotData.filename,
+        this.screenshotData.width,
+        this.screenshotData.height,
+      );
+      this.screenshotDialog = false;
     },
     setSceneToWindo: function () {
       window.scene = this.$refs.scaffold.$module.scene;
@@ -838,6 +928,12 @@ export default {
           this.viewURL = query.viewURL;
         } else {
           this.viewURL = "";
+        }
+
+        if (query.wholeBody && query.wholeBody === "true") {
+          console.log("wholebody", query.wholeBody)
+          this.wholeBody = true;
+          this.usageConfig.tubeLines = true;
         }
       })
     },

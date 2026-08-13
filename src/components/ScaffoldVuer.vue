@@ -1288,21 +1288,47 @@ export default {
      * This is called by captueeScreenshot and after the last render
      * loop, it download a screenshot of the current scene with no UI.
      */
-    captureScreenshotCallback: function () {
+    captureScreenshotCallback: function (filename, width, height) {
+      return () => {
       //Remove the callback, only needs to happen once
-      this.$module.zincRenderer.removePostRenderCallbackFunction(
-        this.captureID
-      );
-      let screenshot = this.$module.zincRenderer
-        .getThreeJSRenderer()
-        .domElement.toDataURL("image/png");
-      let hrefElement = document.createElement("a");
-      document.body.append(hrefElement);
-      if (!this.captureFilename) hrefElement.download = `screenshot.png`;
-      else hrefElement.download = this.captureFilename;
-      hrefElement.href = screenshot;
-      hrefElement.click();
-      hrefElement.remove();
+        this.$module.zincRenderer.removePostRenderCallbackFunction(
+          this.captureID
+        );
+
+        const renderer = this.$module.zincRenderer.getThreeJSRenderer();
+        const camera = this.$module.scene.camera;
+
+        const originalWidth = renderer.domElement.width;
+        const originalHeight = renderer.domElement.height;
+        const originalAspect = camera.aspect;
+        const originalPixelRatio = renderer.getPixelRatio();
+
+        renderer.setPixelRatio(1);
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        //this.$module.zincRenderer.onWindowResize();
+        this.$module.zincRenderer.render();
+        //renderer.render(this.$module.scene, camera);
+
+        let screenshot = renderer.domElement.toDataURL("image/png");
+
+        renderer.setPixelRatio(originalPixelRatio);
+        renderer.setSize(originalWidth, originalHeight, false);
+        camera.aspect = originalAspect;
+        camera.updateProjectionMatrix();
+        //this.$module.zincRenderer.onWindowResize();
+        this.$module.zincRenderer.render();
+        //renderer.render(this.$module.scene, camera);
+
+        let hrefElement = document.createElement("a");
+        //document.body.append(hrefElement);
+        if (!filename) hrefElement.download = `screenshot.png`;
+        else hrefElement.download = filename;
+        hrefElement.href = screenshot;
+        hrefElement.click();
+        hrefElement.remove();
+      }
     },
     /**
      * @public
@@ -1310,10 +1336,9 @@ export default {
      *
      * @arg {String} "filename given to the screenshot."
      */
-    captureScreenshot: function (filename) {
-      this.captureFilename = filename;
+    captureScreenshot: function (filename, width = 1920, height = 1080) {
       this.captureID = this.$module.zincRenderer.addPostRenderCallbackFunction(
-        this.captureScreenshotCallback
+        this.captureScreenshotCallback(filename, width, height)
       );
     },
     /**
