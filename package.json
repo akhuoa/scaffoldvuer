@@ -13,6 +13,7 @@
     "serve": "vite --host --force",
     "build-bundle": "vite build",
     "build-static": "vite build -c vite.static-build.js",
+    "lint": "eslint .",
     "vuese-gen": "node vuese-generator.js",
     "vuese-watch": "node vuese-generator.js watch",
     "changelog": "auto-changelog -p --output CHANGELOG.md --template keepachangelog",
@@ -58,6 +59,7 @@
     "zincjs": "^2.1.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@babel/eslint-parser": "^8.0.1",
     "@vitejs/plugin-vue": "^6.0.8",
     "unplugin-vue-components": "^32.1.0",
@@ -68,6 +70,7 @@
     "concurrently": "^9.2.4",
     "eslint": "^10.9.1",
     "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.11.0",
     "sass": "^1.103.1",
     "vite": "^8.2.1",
     "vite-plugin-node-polyfills": "^0.28.0",
@@ -80,20 +83,6 @@
     "@rollup/rollup-darwin-arm64": "4.63.0",
     "@rollup/rollup-linux-x64-gnu": "4.63.0",
     "@rollup/rollup-win32-x64-msvc": "4.63.0"
-  },
-  "eslintConfig": {
-    "root": true,
-    "env": {
-      "node": true
-    },
-    "extends": [
-      "plugin:vue/essential",
-      "eslint:recommended"
-    ],
-    "rules": {},
-    "parserOptions": {
-      "parser": "babel-eslint"
-    }
   },
   "browserslist": [
     "> 1%",
