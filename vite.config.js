@@ -36,12 +36,12 @@ export default defineConfig(({ command, mode }) => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': path.resolve(import.meta.dirname, './src'),
       }
     },
     build: {
       lib: {
-        entry: path.resolve(__dirname, "./src/components/index.js"),
+        entry: path.resolve(import.meta.dirname, "./src/components/index.js"),
         name: "ScaffoldVuer",
         fileName: 'scaffoldvuer',
       },
@@ -55,6 +55,11 @@ export default defineConfig(({ command, mode }) => {
             "@abi-software/map-utilities": "@abi-software/map-utilities",
             "pinia": "pinia"
           },
+          // keep css output name stable for the "./dist/style.css" export/import paths
+          assetFileNames: (assetInfo) =>
+            assetInfo.name?.endsWith(".css")
+              ? "style.css"
+              : "assets/[name][extname]",
         },
       },
     },
