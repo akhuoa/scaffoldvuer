@@ -60,6 +60,7 @@
           <div
             v-if="displayWarning"
             class="message-icon warning-icon control-layer"
+            data-help-id="warning"
             @mouseover="showHelpText(7)"
             @mouseout="hideHelpText(7)"
           >
@@ -82,6 +83,7 @@
           <div
             v-if="displayLatestChanges && latestChangesMessage"
             class="el-icon-warning message-icon latest-changesicon control-layer"
+            data-help-id="whats-new"
             @mouseover="showHelpText(8)"
             @mouseout="hideHelpText(8)"
           >
@@ -154,6 +156,7 @@
           <div
             v-if="timeVarying"
             class="time-slider-container control-layer"
+            data-help-id="slider"
             :class="[minimisedSlider ? 'minimised' : '', sliderPosition]"
           >
             <el-tabs type="card">
@@ -237,6 +240,7 @@
             <map-svg-icon
               icon="zoomIn"
               class="icon-button zoomIn"
+              data-help-id="zoom-in"
               @click="zoomIn()"
               @mouseover="showHelpText(0)"
               @mouseout="hideHelpText(0)"
@@ -257,6 +261,7 @@
             <map-svg-icon
               icon="zoomOut"
               class="icon-button zoomOut"
+              data-help-id="zoom-out"
               @click="zoomOut()"
               @mouseover="showHelpText(1)"
               @mouseout="hideHelpText(1)"
@@ -281,6 +286,7 @@
             <map-svg-icon
               icon="fitWindow"
               class="icon-button fitWindow"
+              data-help-id="zoom-fit"
               @click="fitWindow()"
               @mouseover="showHelpText(2)"
               @mouseout="hideHelpText(2)"
@@ -402,6 +408,7 @@
               <map-svg-icon
                 v-if="enableOpenMapUI && openMapOptions.length > 0"
                 ref="openMapRef"
+                data-help-id="open-map"
                 icon="openMap"
                 class="icon-button open-map-button"
                 @mouseover="showHelpText(3)"
@@ -424,6 +431,7 @@
             <template #reference>
               <map-svg-icon
                 ref="backgroundIconRef"
+                data-help-id="settings"
                 icon="changeBckgd"
                 class="icon-button"
                 @mouseover="showHelpText(4)"
@@ -469,6 +477,7 @@ import { mapState, mapStores } from 'pinia';
 import { useMainStore } from '@/store/index';
 import { getNerveMaps } from '../scripts/MappedNerves.js';
 import { getOrganMaps } from '../scripts/MappedOrgans.js';
+import { scaffoldHelpModeSteps } from './helpModeSteps.js';
 const nervesMap = getNerveMaps();
 const organsMap = getOrganMaps();
 // let foundNerves = 0;
@@ -2316,6 +2325,35 @@ export default {
      */
     setRegionCheckboxDisabled: function (region, flag, childrenOnly = true) {
       this.$refs.scaffoldTreeControls.setRegionCheckboxDisabled(region, flag, childrenOnly);
+    },
+    /**
+     * @public
+     * Function to get the help mode tour steps of this scaffold,
+     * to be used with ``HelpModeTour`` from ``@abi-software/map-utilities``.
+     * Steps with unavailable targets are skipped by the tour.
+     * @returns {Array} The list of help steps.
+     */
+    getHelpModeSteps: function () {
+      return scaffoldHelpModeSteps.map((stepDef) => {
+        const { id, ...step } = stepDef;
+        const helpStep = {
+          ...step,
+          id: `scaffold-${id}`,
+          target: () => this.$el?.querySelector?.(`[data-help-id="${id}"]`),
+        };
+        if (id === 'regions') {
+          const treeControls = this.$refs.scaffoldTreeControls;
+          helpStep.target = () => treeControls?.$el;
+          helpStep.onEnter = () => {
+            if (treeControls && !treeControls.drawerOpen) treeControls.toggleDrawer();
+          };
+        } else if (id === 'warning') {
+          helpStep.description = this.warningMessage;
+        } else if (id === 'whats-new') {
+          helpStep.description = this.latestChangesMessage;
+        }
+        return helpStep;
+      });
     },
     /**
      * @public

@@ -52,6 +52,7 @@
       @show-next="onHelpModeShowNext"
       @finish-help-mode="onFinishHelpMode"
     />
+    <HelpModeTour v-model="helpTourOpen" :steps="helpTourSteps" />
     <el-popover
       popper-class="options-container"
       placement="bottom"
@@ -147,6 +148,7 @@
         <el-row :gutter="20" justify="center" align="middle">
           <el-col :span="auto">
             <el-button size="small" @click="helpMode = !helpMode">Help Mode</el-button>
+            <el-button size="small" @click="startHelpTour">Help Tour</el-button>
           </el-col>
           <el-col :span="auto">
             <el-button type="primary" size="small" @click="screenshotDialog = true">
@@ -433,7 +435,7 @@ import {
   ElSwitch,
 } from 'element-plus';
 import { useRoute, useRouter } from 'vue-router';
-import { HelpModeDialog } from '@abi-software/map-utilities';
+import { HelpModeDialog, HelpModeTour } from '@abi-software/map-utilities';
 import '@abi-software/map-utilities/dist/style.css';
 
 let texture_prefix = undefined;
@@ -463,6 +465,7 @@ export default {
     ScaffoldVuer,
     ModelsTable,
     HelpModeDialog,
+    HelpModeTour,
   },
   provide() {
     return {
@@ -511,6 +514,8 @@ export default {
       helpModeActiveItem: 0,
       helpModeLastItem: false,
       useHelpModeDialog: true,
+      helpTourOpen: false,
+      helpTourSteps: [],
       scaffoldRef: null,
       screenshotDialog: false,
       route: useRoute(),
@@ -971,6 +976,10 @@ export default {
           this.usageConfig.tubeLines = true;
         }
       });
+    },
+    startHelpTour: function () {
+      this.helpTourSteps = this.$refs.scaffold.getHelpModeSteps();
+      this.helpTourOpen = true;
     },
     onHelpModeShowNext: function () {
       this.helpModeActiveItem += 1;
