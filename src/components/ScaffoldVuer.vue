@@ -1,6 +1,7 @@
 <template>
   <scaffold-overlay
     ref="scaffoldContainer"
+    data-help-scope
     v-loading="loading"
     class="scaffold-container"
     element-loading-text="Loading..."
@@ -40,16 +41,15 @@
         :toolbarOptions="toolbarOptions"
         :activeDrawTool="activeDrawTool"
         :activeDrawMode="activeDrawMode"
-        :hoverVisibilities="hoverVisibilities"
         @clickToolbar="toggleDrawing"
-        @showTooltip="showHelpText"
-        @hideTooltip="hideHelpText"
         ref="toolbarPopover"
       />
       <el-popover
         v-if="displayWarning"
         ref="warningPopover"
-        :visible="hoverVisibilities[7].value"
+        trigger="hover"
+        :show-after="tooltipDelay"
+        :hide-after="tooltipDelay"
         :content="warningMessage"
         placement="right"
         width="max-content"
@@ -60,9 +60,13 @@
           <div
             v-if="displayWarning"
             class="message-icon warning-icon control-layer"
-            data-help-id="warning"
-            @mouseover="showHelpText(7)"
-            @mouseout="hideHelpText(7)"
+            v-help-mode="{
+              id: 'scaffold-warning',
+              area: 'map-info',
+              title: 'About this scaffold',
+              description: warningMessage,
+              placement: 'right',
+            }"
           >
             <el-icon><el-icon-warning-filled /></el-icon>
             <span class="message-text">Beta</span>
@@ -71,11 +75,12 @@
       </el-popover>
       <el-popover
         v-if="displayLatestChanges"
-        :visible="hoverVisibilities[8].value"
+        :show-after="tooltipDelay"
+        :hide-after="tooltipDelay"
         :content="latestChangesMessage"
         placement="right"
         :teleported="false"
-        trigger="manual"
+        trigger="hover"
         popper-class="scaffold-popper message-popper right-popper non-selectable"
         ref="whatsNewPopover"
       >
@@ -83,51 +88,51 @@
           <div
             v-if="displayLatestChanges && latestChangesMessage"
             class="el-icon-warning message-icon latest-changesicon control-layer"
-            data-help-id="whats-new"
-            @mouseover="showHelpText(8)"
-            @mouseout="hideHelpText(8)"
+            v-help-mode="{
+              id: 'scaffold-whats-new',
+              area: 'map-info',
+              title: 'What\'s new?',
+              description: latestChangesMessage,
+              placement: 'right',
+            }"
           >
             <el-icon><el-icon-warning-filled /></el-icon>
             <span class="message-text">What's new?</span>
           </div>
         </template>
       </el-popover>
-      <el-popover
-        :visible="hoverVisibilities[6].value"
-        content="Change region visibility"
-        placement="right"
-        width="max-content"
-        :teleported="false"
-        trigger="manual"
-        popper-class="scaffold-popper right-popper non-selectable"
-        ref="regionVisibilityPopover"
+      <ScaffoldTreeControls
+        class="control-layer"
+        ref="scaffoldTreeControls"
+        v-help-mode="{
+          id: 'scaffold-regions',
+          area: 'legends',
+          title: 'Regions',
+          description:
+            'Show or hide the regions of the scaffold using the checkboxes. Click on a region name to select it.',
+          placement: 'right',
+          onEnter: openHelpModeRegions,
+        }"
+        :isReady="isReady"
+        :containerHeight="clientHeight"
+        :show-colour-picker="enableColourPicker"
+        @object-selected="objectSelected"
+        @object-hovered="objectHovered"
+        @drawer-toggled="drawerToggled"
+        @check-changed="$emit('check-changed', $event)"
       >
-        <template #reference>
-          <ScaffoldTreeControls
+        <template v-slot:treeSlot>
+          <slot name="treeSlot"></slot>
+          <primitive-controls
             class="control-layer"
-            ref="scaffoldTreeControls"
-            :isReady="isReady"
-            :containerHeight="clientHeight"
-            :show-colour-picker="enableColourPicker"
-            @object-selected="objectSelected"
-            @object-hovered="objectHovered"
-            @drawer-toggled="drawerToggled"
-            @check-changed="$emit('check-changed', $event)"
-          >
-            <template v-slot:treeSlot>
-              <slot name="treeSlot"></slot>
-              <primitive-controls
-                class="control-layer"
-                ref="primitiveControls"
-                :createData="createData"
-                :viewingMode="viewingMode"
-                :usageConfig="usageConfig"
-                @primitivesUpdated="primitivesUpdated"
-              />
-            </template>
-          </ScaffoldTreeControls>
+            ref="primitiveControls"
+            :createData="createData"
+            :viewingMode="viewingMode"
+            :usageConfig="usageConfig"
+            @primitivesUpdated="primitivesUpdated"
+          />
         </template>
-      </el-popover>
+      </ScaffoldTreeControls>
       <!--
         <div class="primitive-controls-box">
 
@@ -141,98 +146,91 @@
           />
         </div>
         -->
-      <el-popover
+      <div
         v-if="timeVarying"
-        ref="sliderPopover"
-        width="max-content"
-        :visible="hoverVisibilities[5].value"
-        content="Move the slider to animate the region"
-        placement="top"
-        :teleported="false"
-        trigger="manual"
-        popper-class="scaffold-popper top-popper non-selectable"
+        class="time-slider-container control-layer"
+        v-help-mode="{
+          id: 'scaffold-slider',
+          area: 'animation',
+          title: 'Animation',
+          description: 'Play or move the slider to animate the scaffold over time.',
+          placement: 'top',
+        }"
+        :class="[minimisedSlider ? 'minimised' : '', sliderPosition]"
       >
-        <template #reference>
-          <div
-            v-if="timeVarying"
-            class="time-slider-container control-layer"
-            data-help-id="slider"
-            :class="[minimisedSlider ? 'minimised' : '', sliderPosition]"
-          >
-            <el-tabs type="card">
-              <el-tab-pane label="Animate scaffold">
-                <el-row class="tab-content">
-                  <map-svg-icon
-                    v-if="isPlaying"
-                    icon="pause"
-                    class="icon-button video-button"
-                    @click="play(false)"
+        <el-tabs type="card">
+          <el-tab-pane label="Animate scaffold">
+            <el-row class="tab-content">
+              <map-svg-icon
+                v-if="isPlaying"
+                icon="pause"
+                class="icon-button video-button"
+                @click="play(false)"
+              />
+              <map-svg-icon
+                v-else
+                icon="play"
+                class="video-button icon-button"
+                @click="play(true)"
+              />
+              <el-slider
+                :min="0"
+                :max="timeMax"
+                :model-value="(currentTime / 100) * timeMax"
+                :step="0.1"
+                tooltip-class="time-slider-tooltip"
+                class="slider"
+                :format-tooltip="formatTooltip"
+                :marks="timeStamps"
+                @input="timeChange($event)"
+              />
+            </el-row>
+          </el-tab-pane>
+          <el-tab-pane label="Animation data">
+            <el-row class="tab-content">
+              <div class="animation-data">
+                Original duration:
+                <div class="purple">
+                  {{ orginalDuration }}
+                </div>
+              </div>
+              <div class="animation-data">
+                Animation duration:
+                <div class="purple">
+                  {{ animateDuration }}
+                </div>
+              </div>
+              <div class="animation-data">
+                Playback speed
+                <el-select
+                  :teleported="true"
+                  :model-value="currentSpeed"
+                  placeholder="Select"
+                  class="scaffold-select-box speed"
+                  popper-class="scaffold_viewer_dropdown"
+                  @change="speedChanged($event)"
+                >
+                  <el-option
+                    v-for="item in playSpeed"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
                   />
-                  <map-svg-icon
-                    v-else
-                    icon="play"
-                    class="video-button icon-button"
-                    @click="play(true)"
-                  />
-                  <el-slider
-                    :min="0"
-                    :max="timeMax"
-                    :model-value="(currentTime / 100) * timeMax"
-                    :step="0.1"
-                    tooltip-class="time-slider-tooltip"
-                    class="slider"
-                    :format-tooltip="formatTooltip"
-                    :marks="timeStamps"
-                    @input="timeChange($event)"
-                  />
-                </el-row>
-              </el-tab-pane>
-              <el-tab-pane label="Animation data">
-                <el-row class="tab-content">
-                  <div class="animation-data">
-                    Original duration:
-                    <div class="purple">
-                      {{ orginalDuration }}
-                    </div>
-                  </div>
-                  <div class="animation-data">
-                    Animation duration:
-                    <div class="purple">
-                      {{ animateDuration }}
-                    </div>
-                  </div>
-                  <div class="animation-data">
-                    Playback speed
-                    <el-select
-                      :teleported="true"
-                      :model-value="currentSpeed"
-                      placeholder="Select"
-                      class="scaffold-select-box speed"
-                      popper-class="scaffold_viewer_dropdown"
-                      @change="speedChanged($event)"
-                    >
-                      <el-option
-                        v-for="item in playSpeed"
-                        :key="item.value"
-                        :label="item.label"
-                        :value="item.value"
-                      />
-                    </el-select>
-                  </div>
-                </el-row>
-              </el-tab-pane>
-            </el-tabs>
-          </div>
-        </template>
-      </el-popover>
+                </el-select>
+              </div>
+            </el-row>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
       <div class="bottom-right-control control-layer">
         <el-popover
-          :visible="hoverVisibilities[0].value"
+          :show-after="tooltipDelay"
+          :hide-after="tooltipDelay"
           content="Zoom in"
           width="max-content"
           placement="left"
           :teleported="false"
-          trigger="manual"
+          trigger="hover"
           popper-class="scaffold-popper left-popper non-selectable"
           ref="zoomInPopover"
         >
@@ -240,20 +238,25 @@
             <map-svg-icon
               icon="zoomIn"
               class="icon-button zoomIn"
-              data-help-id="zoom-in"
+              v-help-mode="{
+                id: 'scaffold-zoom-in',
+                area: 'zoom',
+                title: 'Zoom in',
+                description: 'Zoom in to see more detail. You can also scroll on the scaffold.',
+                placement: 'left',
+              }"
               @click="zoomIn()"
-              @mouseover="showHelpText(0)"
-              @mouseout="hideHelpText(0)"
             />
           </template>
         </el-popover>
         <el-popover
-          :visible="hoverVisibilities[1].value"
+          :show-after="tooltipDelay"
+          :hide-after="tooltipDelay"
           content="Zoom out"
           placement="top-end"
           width="max-content"
           :teleported="false"
-          trigger="manual"
+          trigger="hover"
           popper-class="scaffold-popper popper-zoomout non-selectable"
           ref="zoomOutPopover"
         >
@@ -261,18 +264,23 @@
             <map-svg-icon
               icon="zoomOut"
               class="icon-button zoomOut"
-              data-help-id="zoom-out"
+              v-help-mode="{
+                id: 'scaffold-zoom-out',
+                area: 'zoom',
+                title: 'Zoom out',
+                description: 'Zoom out to see more of the scaffold.',
+                placement: 'top',
+              }"
               @click="zoomOut()"
-              @mouseover="showHelpText(1)"
-              @mouseout="hideHelpText(1)"
             />
           </template>
         </el-popover>
         <el-popover
-          :visible="hoverVisibilities[2].value"
+          :show-after="tooltipDelay"
+          :hide-after="tooltipDelay"
           placement="top"
           :teleported="false"
-          trigger="manual"
+          trigger="hover"
           width="max-content"
           popper-class="scaffold-popper non-selectable"
           ref="zoomFitPopover"
@@ -286,10 +294,14 @@
             <map-svg-icon
               icon="fitWindow"
               class="icon-button fitWindow"
-              data-help-id="zoom-fit"
+              v-help-mode="{
+                id: 'scaffold-zoom-fit',
+                area: 'zoom',
+                title: 'Fit to window',
+                description: 'Reset the view so the whole scaffold fits in the window.',
+                placement: 'top',
+              }"
               @click="fitWindow()"
-              @mouseover="showHelpText(2)"
-              @mouseout="hideHelpText(2)"
             />
           </template>
         </el-popover>
@@ -395,11 +407,12 @@
       <div class="settings-group control-layer" :class="{ open: drawerOpen, close: !drawerOpen }">
         <el-row v-if="showOpenMapButton">
           <el-popover
-            :visible="hoverVisibilities[3].value"
+            :show-after="tooltipDelay"
+            :hide-after="tooltipDelay"
             content="Open new map"
             placement="right"
             :teleported="false"
-            trigger="manual"
+            trigger="hover"
             width="max-content"
             popper-class="scaffold-popper right-popper non-selectable"
             ref="openMapPopover"
@@ -408,34 +421,44 @@
               <map-svg-icon
                 v-if="enableOpenMapUI && openMapOptions.length > 0"
                 ref="openMapRef"
-                data-help-id="open-map"
+                v-help-mode="{
+                  id: 'scaffold-open-map',
+                  area: 'map-settings',
+                  title: 'Open new map',
+                  description: 'Open a related map in a new view.',
+                  placement: 'right',
+                }"
                 icon="openMap"
                 class="icon-button open-map-button"
-                @mouseover="showHelpText(3)"
-                @mouseout="hideHelpText(3)"
               />
             </template>
           </el-popover>
         </el-row>
         <el-row v-if="showLocalSettings">
           <el-popover
-            :visible="hoverVisibilities[4].value"
+            :show-after="tooltipDelay"
+            :hide-after="tooltipDelay"
             content="Change background color"
             placement="right"
             width="max-content"
             :teleported="false"
-            trigger="manual"
+            trigger="hover"
             popper-class="scaffold-popper right-popper non-selectable"
             ref="settingsPopover"
           >
             <template #reference>
               <map-svg-icon
                 ref="backgroundIconRef"
-                data-help-id="settings"
+                v-help-mode="{
+                  id: 'scaffold-settings',
+                  area: 'map-settings',
+                  title: 'Settings',
+                  description:
+                    'Change the settings, such as the viewing mode, colours and the background.',
+                  placement: 'right',
+                }"
                 icon="changeBckgd"
                 class="icon-button"
-                @mouseover="showHelpText(4)"
-                @mouseout="hideHelpText(4)"
               />
             </template>
           </el-popover>
@@ -454,7 +477,7 @@ import { readNIFTIFromSource } from '../scripts/niftiHelper.js';
 import ScaffoldTooltip from './ScaffoldTooltip.vue';
 import ScaffoldTreeControls from './ScaffoldTreeControls.vue';
 import { MapSvgIcon, MapSvgSpriteColor } from '@abi-software/svg-sprite';
-import { DrawToolbar } from '@abi-software/map-utilities';
+import { DrawToolbar, collectHelpModeSteps, helpModeDirective } from '@abi-software/map-utilities';
 import '@abi-software/map-utilities/dist/style.css';
 import {
   createNewAnnotationsWithFeatures,
@@ -477,7 +500,6 @@ import { mapState, mapStores } from 'pinia';
 import { useMainStore } from '@/store/index';
 import { getNerveMaps } from '../scripts/MappedNerves.js';
 import { getOrganMaps } from '../scripts/MappedOrgans.js';
-import { scaffoldHelpModeSteps } from './helpModeSteps.js';
 const nervesMap = getNerveMaps();
 const organsMap = getOrganMaps();
 // let foundNerves = 0;
@@ -499,6 +521,9 @@ export default {
     ElIconWarningFilled,
     DrawToolbar,
     ScaffoldTreeControls,
+  },
+  directives: {
+    helpMode: helpModeDirective,
   },
   setup(props) {
     let annotator = inject('$annotator');
@@ -556,44 +581,6 @@ export default {
     displayAtStartUp: {
       type: Boolean,
       default: true,
-    },
-    /**
-     * Use for toggling the help tooltips.
-     */
-    helpMode: {
-      type: Boolean,
-      default: false,
-    },
-    /**
-     * The active item index of help mode.
-     */
-    helpModeActiveItem: {
-      type: Number,
-      default: 0,
-    },
-    /**
-     * The option to use helpModeDialog.
-     * On default, `false`, clicking help will show all tooltips.
-     * If `true`, clicking help will show the help-mode-dialog.
-     */
-    helpModeDialog: {
-      type: Boolean,
-      default: false,
-    },
-    /**
-     * The last item of help mode.
-     */
-    helpModeLastItem: {
-      type: Boolean,
-      default: false,
-    },
-    /**
-     * The initial index number for help mode tooltips.
-     * Set negative (e.g. -1) if there are other tooltips outside of `hoverVisibilities`.
-     */
-    helpModeInitialIndex: {
-      type: Number,
-      default: 0,
     },
     /**
      * Use for show/display beta warning icon.
@@ -843,23 +830,8 @@ export default {
        */
       isTransitioning: false,
       tooltipAppendToBody: false,
-      hoverVisibilities: [
-        { value: false, ref: 'zoomInPopover' }, // 0
-        { value: false, ref: 'zoomOutPopover' }, // 1
-        { value: false, ref: 'zoomFitPopover' }, // 2
-        { value: false, ref: 'openMapPopover' }, // 3
-        { value: false, ref: 'settingsPopover' }, // 4
-        { value: false, ref: 'sliderPopover' }, // 5
-        { value: false, ref: 'regionVisibilityPopover' }, // 6
-        { value: false, ref: 'warningPopover' }, // 7
-        { value: false, ref: 'whatsNewPopover' }, // 8
-        { value: false, refs: 'toolbarPopover', ref: 'editPopover' }, // 9
-        { value: false, refs: 'toolbarPopover', ref: 'pointPopover' }, // 10
-        { value: false, refs: 'toolbarPopover', ref: 'lineStringPopover' }, // 11
-        { value: false, refs: 'toolbarPopover', ref: 'deletePopover' }, // 11
-      ],
-      inHelp: false,
-      helpModeActiveIndex: this.helpModeInitialIndex,
+      // Delay before showing and hiding the control tooltips
+      tooltipDelay: 500,
       loading: false,
       duration: 3000,
       drawerOpen: true,
@@ -985,19 +957,6 @@ export default {
       immediate: true,
     },
     */
-    helpMode: function (newVal, oldVal) {
-      if (newVal !== oldVal) {
-        this.setHelpMode(newVal);
-      }
-    },
-    helpModeActiveItem: function () {
-      // just take the action from helpModeActiveItem
-      // work with local value since the indexing is different
-      if (this.helpMode) {
-        this.helpModeActiveIndex += 1;
-        this.setHelpMode(this.helpMode);
-      }
-    },
     displayMarkers: function (val) {
       this.$module.scene.displayMarkers = val;
       //Update pickable objects
@@ -1056,8 +1015,6 @@ export default {
     this.toggleRendering(this.render);
     this.clientHeight = this.$refs.scaffoldContainer.$el.clientHeight;
     this.ro = new ResizeObserver(this.adjustLayout).observe(this.$refs.scaffoldContainer.$el);
-    this.helpTextWait = [];
-    this.helpTextWait.length = this.hoverVisibilities.length;
     this.defaultRate = this.$module.getPlayRate();
     this.$module.zincRenderer.addPreRenderCallbackFunction(() => {
       this.currentTime = this.$module.getCurrentTime();
@@ -2328,89 +2285,19 @@ export default {
     },
     /**
      * @public
-     * Function to get the help mode tour steps of this scaffold,
-     * to be used with ``HelpModeTour`` from ``@abi-software/map-utilities``.
-     * Steps with unavailable targets are skipped by the tour.
+     * Function to get the help mode steps of this scaffold, from the elements with ``v-help-mode``,
+     * to be used with ``HelpModeTour`` and ``HelpModeHover`` from ``@abi-software/map-utilities``.
      * @returns {Array} The list of help steps.
      */
     getHelpModeSteps: function () {
-      return scaffoldHelpModeSteps.map((stepDef) => {
-        const { id, ...step } = stepDef;
-        const helpStep = {
-          ...step,
-          id: `scaffold-${id}`,
-          target: () => this.$el?.querySelector?.(`[data-help-id="${id}"]`),
-        };
-        if (id === 'regions') {
-          const treeControls = this.$refs.scaffoldTreeControls;
-          helpStep.target = () => treeControls?.$el;
-          helpStep.onEnter = () => {
-            if (treeControls && !treeControls.drawerOpen) treeControls.toggleDrawer();
-          };
-        } else if (id === 'warning') {
-          helpStep.description = this.warningMessage;
-        } else if (id === 'whats-new') {
-          helpStep.description = this.latestChangesMessage;
-        }
-        return helpStep;
-      });
+      return collectHelpModeSteps(this.$el);
     },
     /**
-     * @public
-     * Function to toggle on/off overlay help.
+     * Open the regions drawer to show its help.
      */
-    setHelpMode: function (helpMode) {
-      const toolTipsLength = this.hoverVisibilities.length;
-      const lastIndex = toolTipsLength - 1;
-      const activePopoverObj = this.hoverVisibilities[this.helpModeActiveIndex];
-
-      if (activePopoverObj) {
-        const popoverRefsId = activePopoverObj?.refs;
-        const popoverRefId = activePopoverObj?.ref;
-        const popoverRef = this.$refs[popoverRefsId ? popoverRefsId : popoverRefId];
-
-        if (!popoverRef) {
-          // skip the unavailable tooltips
-          this.helpModeActiveIndex += 1;
-        }
-      }
-
-      if (!helpMode) {
-        // reset to iniital state
-        this.helpModeActiveIndex = this.helpModeInitialIndex;
-      }
-
-      if (helpMode && this.helpModeActiveIndex >= lastIndex) {
-        /**
-         * This event is emitted when the tooltips in help mode reach the last item.
-         */
-        this.$emit('help-mode-last-item', true);
-      }
-
-      if (helpMode && !this.helpModeDialog) {
-        this.inHelp = true;
-        this.hoverVisibilities.forEach((item) => {
-          item.value = true;
-        });
-      } else if (helpMode && this.helpModeDialog && toolTipsLength > this.helpModeActiveIndex) {
-        // Show the map tooltip as first item
-        if (this.helpModeActiveIndex > -1) {
-          // wait for CSS transition
-          setTimeout(() => {
-            this.inHelp = false;
-            this.hoverVisibilities.forEach((item) => {
-              item.value = false;
-            });
-
-            this.showHelpText(this.helpModeActiveIndex, 200);
-          }, 300);
-        }
-      } else {
-        this.inHelp = false;
-        this.hoverVisibilities.forEach((item) => {
-          item.value = false;
-        });
-      }
+    openHelpModeRegions: function () {
+      const treeControls = this.$refs.scaffoldTreeControls;
+      if (treeControls && !treeControls.drawerOpen) treeControls.toggleDrawer();
     },
     /**
      * Callback function used by showRegionTooltip in the case when the tooltip
@@ -2805,33 +2692,6 @@ export default {
         if (result && result.objects.length > 0) {
           result.objects.forEach((object) => object.setMarkerMode(mode));
         }
-      }
-    },
-    /**
-     * This is called when mouse cursor enters supported elements
-     * with help tootltips.
-     */
-    showHelpText: function (helpTextNumber, timeout = 500) {
-      if (!this.inHelp) {
-        clearTimeout(this.helpTextWait[helpTextNumber]);
-        this.helpTextWait[helpTextNumber] = setTimeout(() => {
-          this.hoverVisibilities[helpTextNumber].value = true;
-          /**
-           * This event is emitted after a tooltip in Flatmap is shown.
-           */
-          this.$emit('shown-tooltip');
-        }, timeout);
-      }
-    },
-    /**
-     * This is called when mouse cursor exits supported element..
-     */
-    hideHelpText: function (helpTextNumber, timeout = 500) {
-      if (!this.inHelp) {
-        clearTimeout(this.helpTextWait[helpTextNumber]);
-        this.helpTextWait[helpTextNumber] = setTimeout(() => {
-          this.hoverVisibilities[helpTextNumber].value = false;
-        }, timeout);
       }
     },
     /**

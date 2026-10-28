@@ -12,12 +12,6 @@
         :flatmapAPI="flatmapAPI"
         :display-u-i="displayUI"
         :url="url"
-        :help-mode="helpMode"
-        :helpModeDialog="useHelpModeDialog"
-        :helpModeActiveItem="helpModeActiveItem"
-        @help-mode-last-item="onHelpModeLastItem"
-        @shown-tooltip="onTooltipShown"
-        @shown-map-tooltip="onMapTooltipShown"
         :display-latest-changes="false"
         :display-minimap="displayMinimap"
         :display-markers="displayMarkers"
@@ -44,14 +38,6 @@
       ></ScaffoldVuer>
     </drop-zone>
 
-    <HelpModeDialog
-      v-if="helpMode && useHelpModeDialog"
-      ref="scaffoldHelp"
-      :scaffoldRef="scaffoldRef"
-      :lastItem="helpModeLastItem"
-      @show-next="onHelpModeShowNext"
-      @finish-help-mode="onFinishHelpMode"
-    />
     <HelpModeTour v-model="helpTourOpen" :steps="helpTourSteps" />
     <HelpModeHover v-model="helpHoverOpen" :steps="helpTourSteps" />
     <el-popover
@@ -148,7 +134,6 @@
 
         <el-row :gutter="20" justify="center" align="middle">
           <el-col :span="auto">
-            <el-button size="small" @click="helpMode = !helpMode">Help Mode</el-button>
             <el-button size="small" @click="startHelpTour">Help Tour</el-button>
             <el-button size="small" @click="startHelpHover">Hover Help</el-button>
           </el-col>
@@ -437,7 +422,7 @@ import {
   ElSwitch,
 } from 'element-plus';
 import { useRoute, useRouter } from 'vue-router';
-import { HelpModeDialog, HelpModeHover, HelpModeTour } from '@abi-software/map-utilities';
+import { HelpModeHover, HelpModeTour } from '@abi-software/map-utilities';
 import '@abi-software/map-utilities/dist/style.css';
 
 let texture_prefix = undefined;
@@ -466,7 +451,6 @@ export default {
     DropZone,
     ScaffoldVuer,
     ModelsTable,
-    HelpModeDialog,
     HelpModeTour,
     HelpModeHover,
   },
@@ -483,7 +467,6 @@ export default {
       input: undefined,
       displayUI: true,
       selectedCoordinates: undefined,
-      helpMode: false,
       displayMarkers: false,
       onClickMarkers: false,
       wireframe: false,
@@ -514,9 +497,6 @@ export default {
       loadTextureVolumeOnReady: false,
       readyCallback: undefined,
       flatmapAPI: 'https://mapcore-demo.org/devel/flatmap/v4/',
-      helpModeActiveItem: 0,
-      helpModeLastItem: false,
-      useHelpModeDialog: true,
       helpTourOpen: false,
       helpTourSteps: [],
       helpHoverOpen: false,
@@ -591,11 +571,6 @@ export default {
       handler: 'parseQuery',
       deep: true,
       immediate: true,
-    },
-    helpMode: function (newVal) {
-      if (!newVal) {
-        this.helpModeActiveItem = 0;
-      }
     },
   },
   mounted: function () {
@@ -988,30 +963,6 @@ export default {
     startHelpHover: function () {
       this.helpTourSteps = this.$refs.scaffold.getHelpModeSteps();
       this.helpHoverOpen = true;
-    },
-    onHelpModeShowNext: function () {
-      this.helpModeActiveItem += 1;
-    },
-    onHelpModeLastItem: function (isLastItem) {
-      if (isLastItem) {
-        this.helpModeLastItem = true;
-      }
-    },
-    onFinishHelpMode: function () {
-      this.helpMode = false;
-      // reset help mode to default values
-      this.helpModeActiveItem = 0;
-      this.helpModeLastItem = false;
-    },
-    onTooltipShown: function () {
-      if (this.$refs.scaffold && this.$refs.scaffoldHelp) {
-        this.$refs.scaffoldHelp.toggleTooltipHighlight();
-      }
-    },
-    onMapTooltipShown: function () {
-      if (this.$refs.scaffold && this.$refs.scaffoldHelp) {
-        this.$refs.scaffoldHelp.toggleTooltipPinHighlight();
-      }
     },
   },
 };
